@@ -1,22 +1,21 @@
-# COMMENTED OUT - Setup in progress
-# name: Cleanup & Maintenance
+name: Cleanup & Maintenance
 
-# on:
-#   schedule:
-#     # Run every Sunday at 2 AM UTC
-#     - cron: '0 2 * * 0'
-#   workflow_dispatch:
-#     inputs:
-#       cleanup_type:
-#         description: 'Type of cleanup to perform'
-#         required: true
-#         default: 'all'
-#         type: choice
-#         options:
-#           - all
-#           - cache
-#           - dependencies
-#           - docker
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      cleanup_type:
+        description: 'Type of cleanup to perform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - cache
+          - dependencies
+          - docker
 
 jobs:
   cleanup:

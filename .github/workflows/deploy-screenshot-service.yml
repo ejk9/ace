@@ -1,19 +1,18 @@
-# COMMENTED OUT - Setup in progress
-# name: Deploy Screenshot Service
+name: Deploy Screenshot Service
 
-# on:
-#   push:
-#     branches: [ main, master ]
-#     paths:
-#       - 'railway-functions/screenshot/**'
-#       - '.github/workflows/deploy-screenshot-service.yml'
-#   workflow_dispatch:
-#     inputs:
-#       force_deploy:
-#         description: 'Force deploy screenshot service'
-#         required: false
-#         default: false
-#         type: boolean
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'railway-functions/screenshot/**'
+      - '.github/workflows/deploy-screenshot-service.yml'
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deploy screenshot service'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy-screenshot-service:
