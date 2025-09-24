@@ -35,6 +35,9 @@ COPY . .
 # Compile dependencies
 RUN mix deps.compile
 
+# Force dependency resolution before asset setup to avoid lock conflicts
+RUN mix deps.get --force
+
 # Setup and compile assets (Phoenix uses esbuild/tailwind directly)
 RUN mix assets.setup
 RUN mix assets.deploy
