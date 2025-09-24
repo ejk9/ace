@@ -17,6 +17,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 jobs:
   build-and-deploy:
@@ -88,13 +90,13 @@ jobs:
       run: |
         # Wait for deployment to be ready
         sleep 30
-        
+
         # Get the Railway domain
         DOMAIN=$(railway domain 2>/dev/null || echo "")
-        
+
         if [ ! -z "$DOMAIN" ]; then
           echo "Checking health at https://$DOMAIN/health"
-          
+
           # Retry health check up to 10 times
           for i in {1..10}; do
             if curl -f -s "https://$DOMAIN/health" > /dev/null; then
@@ -105,7 +107,7 @@ jobs:
               sleep 30
             fi
           done
-          
+
           echo "❌ Health check failed after 10 attempts"
           exit 1
         else
@@ -120,7 +122,7 @@ jobs:
         DOMAIN=$(railway domain 2>/dev/null || echo "Railway deployment")
         echo "🚀 Deployment successful!"
         echo "🌐 Application URL: https://$DOMAIN"
-        
+
         # Optional: Send notification to Discord, Slack, etc.
         # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
         #   -H "Content-Type: application/json" \
@@ -133,7 +135,7 @@ jobs:
       run: |
         echo "❌ Deployment failed!"
         railway logs --tail=50
-        
+
         # Optional: Send failure notification
         # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
         #   -H "Content-Type: application/json" \

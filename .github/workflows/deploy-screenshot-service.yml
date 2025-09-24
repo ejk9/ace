@@ -1,140 +1,140 @@
-name: Deploy Screenshot Service
+# name: Deploy Screenshot Service
 
-on:
-  push:
-    branches: [ main, master ]
-    paths:
-      - 'railway-functions/screenshot/**'
-      - '.github/workflows/deploy-screenshot-service.yml'
-  workflow_dispatch:
-    inputs:
-      force_deploy:
-        description: 'Force deploy screenshot service'
-        required: false
-        default: false
-        type: boolean
+# on:
+#   push:
+#     branches: [ main, master ]
+#     paths:
+#       - 'railway-functions/screenshot/**'
+#       - '.github/workflows/deploy-screenshot-service.yml'
+#   workflow_dispatch:
+#     inputs:
+#       force_deploy:
+#         description: 'Force deploy screenshot service'
+#         required: false
+#         default: false
+#         type: boolean
 
-jobs:
-  deploy-screenshot-service:
-    name: Deploy Screenshot Service to Railway Functions
-    runs-on: ubuntu-latest
+# jobs:
+#   deploy-screenshot-service:
+#     name: Deploy Screenshot Service to Railway Functions
+#     runs-on: ubuntu-latest
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: 'railway-functions/screenshot/package-lock.json'
+#     - name: Set up Node.js
+#       uses: actions/setup-node@v4
+#       with:
+#         node-version: '18'
+#         cache: 'npm'
+#         cache-dependency-path: 'railway-functions/screenshot/package-lock.json'
 
-    - name: Install dependencies
-      working-directory: ./railway-functions/screenshot
-      run: npm ci
+#     - name: Install dependencies
+#       working-directory: ./railway-functions/screenshot
+#       run: npm ci
 
-    - name: Run tests (if any)
-      working-directory: ./railway-functions/screenshot
-      run: |
-        # Add tests here when available
-        echo "No tests configured for screenshot service yet"
+#     - name: Run tests (if any)
+#       working-directory: ./railway-functions/screenshot
+#       run: |
+#         # Add tests here when available
+#         echo "No tests configured for screenshot service yet"
 
-    - name: Install Railway CLI
-      run: |
-        npm install -g @railway/cli
-        railway --version
+#     - name: Install Railway CLI
+#       run: |
+#         npm install -g @railway/cli
+#         railway --version
 
-    - name: Deploy Railway Function
-      working-directory: ./railway-functions/screenshot
-      run: |
-        railway login --token ${{ secrets.RAILWAY_TOKEN }}
-        
-        # Deploy the function
-        railway functions deploy
-        
-        # Get the function URL
-        FUNCTION_URL=$(railway functions list --json | jq -r '.[0].url' 2>/dev/null || echo "")
-        
-        if [ ! -z "$FUNCTION_URL" ]; then
-          echo "Function deployed successfully!"
-          echo "Function URL: $FUNCTION_URL"
-          
-          # Update the main app's environment variable
-          railway switch ace-app 2>/dev/null || true
-          railway variables set SCREENSHOT_SERVICE_URL="$FUNCTION_URL"
-          
-          echo "✅ SCREENSHOT_SERVICE_URL updated in main application"
-        else
-          echo "❌ Could not get function URL"
-          exit 1
-        fi
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+#     - name: Deploy Railway Function
+#       working-directory: ./railway-functions/screenshot
+#       run: |
+#         railway login --token ${{ secrets.RAILWAY_TOKEN }}
 
-    - name: Test screenshot service
-      run: |
-        # Wait for function to be ready
-        sleep 10
-        
-        FUNCTION_URL=$(railway functions list --json | jq -r '.[0].url' 2>/dev/null || echo "")
-        
-        if [ ! -z "$FUNCTION_URL" ]; then
-          echo "Testing screenshot service health..."
-          
-          # Test health endpoint
-          if curl -f -s "$FUNCTION_URL/health" > /dev/null; then
-            echo "✅ Screenshot service health check passed!"
-          else
-            echo "⚠️ Screenshot service health check failed"
-          fi
-          
-          echo "Testing screenshot capture with mock data..."
-          
-          # Test screenshot endpoint with mock data
-          curl -X POST "$FUNCTION_URL/" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "playerData": {
-                "player_name": "Test Player",
-                "team_name": "Test Team",
-                "champion_name": "Test Champion",
-                "role": "ADC",
-                "pick_number": 1,
-                "champion_splash_url": "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_0.jpg",
-                "team_color": "#c8aa6e"
-              }
-            }' \
-            -w "\nHTTP Status: %{http_code}\n" || echo "Screenshot test completed"
-        else
-          echo "❌ Could not test screenshot service - no URL available"
-        fi
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+#         # Deploy the function
+#         railway functions deploy
 
-    - name: Notify deployment success
-      if: success()
-      run: |
-        FUNCTION_URL=$(railway functions list --json | jq -r '.[0].url' 2>/dev/null || echo "Railway Function")
-        echo "🎉 Screenshot service deployed successfully!"
-        echo "📸 Function URL: $FUNCTION_URL"
-        
-        # Optional: Send notification
-        # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
-        #   -H "Content-Type: application/json" \
-        #   -d '{"content": "📸 Screenshot service deployed successfully to Railway Functions!\n🔗 **URL:** '"$FUNCTION_URL"'"}'
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+#         # Get the function URL
+#         FUNCTION_URL=$(railway functions list --json | jq -r '.[0].url' 2>/dev/null || echo "")
 
-    - name: Notify deployment failure
-      if: failure()
-      run: |
-        echo "❌ Screenshot service deployment failed!"
-        railway functions logs --tail=20 2>/dev/null || echo "Could not fetch function logs"
-        
-        # Optional: Send failure notification
-        # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
-        #   -H "Content-Type: application/json" \
-        #   -d '{"content": "❌ Screenshot service deployment to Railway Functions failed!\n📋 Check GitHub Actions for details."}'
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+#         if [ ! -z "$FUNCTION_URL" ]; then
+#           echo "Function deployed successfully!"
+#           echo "Function URL: $FUNCTION_URL"
+
+#           # Update the main app's environment variable
+#           railway switch ace-app 2>/dev/null || true
+#           railway variables set SCREENSHOT_SERVICE_URL="$FUNCTION_URL"
+
+#           echo "✅ SCREENSHOT_SERVICE_URL updated in main application"
+#         else
+#           echo "❌ Could not get function URL"
+#           exit 1
+#         fi
+#       env:
+#         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+#     - name: Test screenshot service
+#       run: |
+#         # Wait for function to be ready
+#         sleep 10
+
+#         FUNCTION_URL=$(railway functions list --json | jq -r '.[0].url' 2>/dev/null || echo "")
+
+#         if [ ! -z "$FUNCTION_URL" ]; then
+#           echo "Testing screenshot service health..."
+
+#           # Test health endpoint
+#           if curl -f -s "$FUNCTION_URL/health" > /dev/null; then
+#             echo "✅ Screenshot service health check passed!"
+#           else
+#             echo "⚠️ Screenshot service health check failed"
+#           fi
+
+#           echo "Testing screenshot capture with mock data..."
+
+#           # Test screenshot endpoint with mock data
+#           curl -X POST "$FUNCTION_URL/" \
+#             -H "Content-Type: application/json" \
+#             -d '{
+#               "playerData": {
+#                 "player_name": "Test Player",
+#                 "team_name": "Test Team",
+#                 "champion_name": "Test Champion",
+#                 "role": "ADC",
+#                 "pick_number": 1,
+#                 "champion_splash_url": "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_0.jpg",
+#                 "team_color": "#c8aa6e"
+#               }
+#             }' \
+#             -w "\nHTTP Status: %{http_code}\n" || echo "Screenshot test completed"
+#         else
+#           echo "❌ Could not test screenshot service - no URL available"
+#         fi
+#       env:
+#         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+#     - name: Notify deployment success
+#       if: success()
+#       run: |
+#         FUNCTION_URL=$(railway functions list --json | jq -r '.[0].url' 2>/dev/null || echo "Railway Function")
+#         echo "🎉 Screenshot service deployed successfully!"
+#         echo "📸 Function URL: $FUNCTION_URL"
+
+#         # Optional: Send notification
+#         # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+#         #   -H "Content-Type: application/json" \
+#         #   -d '{"content": "📸 Screenshot service deployed successfully to Railway Functions!\n🔗 **URL:** '"$FUNCTION_URL"'"}'
+#       env:
+#         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+#     - name: Notify deployment failure
+#       if: failure()
+#       run: |
+#         echo "❌ Screenshot service deployment failed!"
+#         railway functions logs --tail=20 2>/dev/null || echo "Could not fetch function logs"
+
+#         # Optional: Send failure notification
+#         # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+#         #   -H "Content-Type: application/json" \
+#         #   -d '{"content": "❌ Screenshot service deployment to Railway Functions failed!\n📋 Check GitHub Actions for details."}'
+#       env:
+#         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
