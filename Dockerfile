@@ -21,12 +21,11 @@ RUN mix local.hex --force && \
 COPY mix.exs mix.lock ./
 RUN mix deps.get --only prod
 
-# Copy assets files
-COPY assets/package*.json assets/
-COPY priv priv
+# Copy package.json files for Node.js dependencies (root level only)
+COPY package*.json ./
 
-# Install Node.js dependencies
-RUN cd assets && npm install
+# Install Node.js dependencies (for E2E tests and development tools)
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -34,7 +33,8 @@ COPY . .
 # Compile dependencies
 RUN mix deps.compile
 
-# Compile assets
+# Setup and compile assets (Phoenix uses esbuild/tailwind directly)
+RUN mix assets.setup
 RUN mix assets.deploy
 
 # Compile the release
