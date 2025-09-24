@@ -1,4 +1,5 @@
-# Use ARM64-compatible Puppeteer image
+# Use platform-specific Puppeteer image for better performance
+# This will automatically use ARM64 on Mac and AMD64 on Railway/CI
 FROM ghcr.io/puppeteer/puppeteer:21.5.0
 
 # Set working directory

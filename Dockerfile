@@ -17,13 +17,13 @@ WORKDIR /app
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# Copy mix files
+# Copy mix files with updated lock
 COPY mix.exs mix.lock ./
 
-# Get all dependencies first (including dev deps needed for asset compilation)
+# Get all dependencies (including dev deps needed for asset compilation)
 RUN mix deps.get
 
-# Copy package.json files for Node.js dependencies (root level only)
+# Copy package.json for Node dependencies
 COPY package*.json ./
 
 # Install Node.js dependencies (for E2E tests and development tools)
