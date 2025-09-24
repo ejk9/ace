@@ -94,6 +94,9 @@ jobs:
         mix deps.audit
         mix hex.audit
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Check Docker build
       run: |
         docker build -t ace-app-test .
