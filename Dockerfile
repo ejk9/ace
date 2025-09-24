@@ -19,7 +19,9 @@ RUN mix local.hex --force && \
 
 # Copy mix files
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only prod
+
+# Get all dependencies first (including dev deps needed for asset compilation)
+RUN mix deps.get
 
 # Copy package.json files for Node.js dependencies (root level only)
 COPY package*.json ./
@@ -36,6 +38,9 @@ RUN mix deps.compile
 # Setup and compile assets (Phoenix uses esbuild/tailwind directly)
 RUN mix assets.setup
 RUN mix assets.deploy
+
+# Clean up dev dependencies for smaller final image
+RUN mix deps.get --only prod
 
 # Compile the release
 RUN MIX_ENV=prod mix compile
@@ -57,9 +62,9 @@ RUN apt-get update -y && apt-get install -y \
 
 # Set locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 # Create app user
 RUN useradd --create-home app
