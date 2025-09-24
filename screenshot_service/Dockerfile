@@ -1,7 +1,5 @@
-# Use a pre-built image with Puppeteer and Chrome already installed
-FROM ghcr.io/puppeteer/puppeteer:21.5.0
 # Use ARM64-compatible Puppeteer image
-FROM --platform=linux/arm64 ghcr.io/puppeteer/puppeteer:21.5.0
+FROM ghcr.io/puppeteer/puppeteer:21.5.0
 
 # Set working directory
 WORKDIR /home/pptruser/app
