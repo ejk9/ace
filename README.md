@@ -1,4 +1,14 @@
-# AceApp
+# Ace
+
+Ace is a tool that provide real time drafting for a league / tournament with support for mock drafts, various different formats, and stream overlays.
+
+# Motivation
+
+To help various League of Legends tournaments with providing a streamlined drafting experience for the player, organizer, and streamer.
+
+## Note
+
+You may have noticed that there is a LOT of stuff and hubbabubba and docs and such in this repository. Large part due to tryign to get familiar working with new fancy schamncy tooling such as Claude Code, so there will be gaps.
 
 To start your Phoenix server:
 
