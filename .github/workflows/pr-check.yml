@@ -1,0 +1,204 @@
+# COMMENTED OUT - Setup in progress
+# name: PR Quality Check
+
+# on:
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+
+env:
+  MIX_ENV: test
+
+jobs:
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-20.04
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ace_app_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15.7'
+        otp-version: '26.1.2'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Restore Elixir dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: |
+        mix local.hex --force
+        mix local.rebar --force
+        mix deps.get
+        npm ci
+
+    - name: Check formatting
+      run: mix format --check-formatted
+
+    - name: Run Credo linter
+      run: mix credo --strict
+
+    - name: Compile with warnings as errors
+      run: mix compile --warnings-as-errors
+
+    - name: Setup test database
+      run: |
+        mix ecto.create
+        mix ecto.migrate
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/ace_app_test
+
+    - name: Run tests with coverage
+      run: mix test --cover
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/ace_app_test
+        DISCORD_CLIENT_ID: test_client_id
+        DISCORD_CLIENT_SECRET: test_client_secret
+        SECRET_KEY_BASE: test_secret_key_base_that_is_at_least_64_characters_long_for_testing
+
+    - name: Build assets
+      run: mix assets.build
+
+    - name: Check for unused dependencies
+      run: mix deps.unlock --check-unused
+
+    - name: Security audit
+      run: |
+        mix deps.audit
+        mix hex.audit
+
+    - name: Check Docker build
+      run: |
+        docker build -t ace-app-test .
+        echo "✅ Docker build successful"
+
+  size-impact:
+    name: Bundle Size Impact
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd assets && npm ci
+
+    - name: Build assets (PR)
+      run: |
+        cd assets && npm run deploy
+        echo "PR bundle size:" > /tmp/bundle-size-pr.txt
+        du -sh ../priv/static/assets/* >> /tmp/bundle-size-pr.txt
+
+    - name: Build assets (main)
+      run: |
+        git checkout origin/main -- assets/
+        cd assets && npm ci && npm run deploy
+        echo "Main bundle size:" > /tmp/bundle-size-main.txt
+        du -sh ../priv/static/assets/* >> /tmp/bundle-size-main.txt
+
+    - name: Compare bundle sizes
+      run: |
+        echo "## Bundle Size Comparison" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Main branch:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/bundle-size-main.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### PR branch:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/bundle-size-pr.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  preview-deployment:
+    name: Preview Deployment
+    runs-on: ubuntu-20.04
+    if: github.event.pull_request.draft == false
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create preview deployment comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('🚀 Preview Deployment')
+          );
+
+          const body = `## 🚀 Preview Deployment
+
+          A preview deployment will be available once the PR is approved and merged to a preview branch.
+          
+          ### Quick Deployment Commands:
+          \`\`\`bash
+          # Deploy this PR to Railway preview
+          git checkout ${context.payload.pull_request.head.sha}
+          railway up --detach
+          \`\`\`
+          
+          ### Changes in this PR:
+          - Commit: ${context.payload.pull_request.head.sha.substring(0, 7)}
+          - Branch: \`${context.payload.pull_request.head.ref}\`
+          
+          *This comment will be updated when the PR is ready for preview deployment.*`;
+
+          if (botComment) {
+            github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body
+            });
+          } else {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+          }

@@ -1,0 +1,10 @@
+This directory is ready for professional audio files.
+
+Currently using synthetic Web Audio API generation with fallback to this directory.
+
+To add professional audio:
+1. Download MP3 files from Freesound.org, Mixkit, or Pixabay
+2. Name them: timer_warning.mp3, timer_urgent.mp3, timer_critical.mp3, turn_notification.mp3, pick_made.mp3, draft_started.mp3
+3. System will automatically use them instead of synthetic audio
+
+Static file serving is now configured for /audio/ requests.

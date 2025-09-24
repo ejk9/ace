@@ -1,0 +1,1555 @@
+<!-- Main Layout Container -->
+<div class="flex h-screen bg-slate-900 text-slate-100">
+  <!-- Main Content Area -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <!-- Draft Room Header -->
+    <div class="bg-slate-800 border-b border-slate-700 px-4 sm:px-6 py-4">
+      <!-- Title Section -->
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center space-x-3 min-w-0 flex-1">
+          <h1 class="text-xl sm:text-2xl font-bold text-yellow-400 truncate">{@draft.name}</h1>
+          <div class={[
+            "px-2 py-1 rounded-full text-xs font-medium shrink-0",
+            case @user_role do
+              :organizer -> "bg-purple-600 text-white"
+              :captain -> "bg-blue-600 text-white"
+              :team_member -> "bg-green-600 text-white"
+              :spectator -> "bg-slate-600 text-slate-200"
+              _ -> "bg-slate-600 text-slate-200"
+            end
+          ]}>
+            {case @user_role do
+              :organizer -> "Organizer"
+              :captain -> if @current_team, do: "#{@current_team.name} Captain", else: "Captain"
+              :team_member -> if @current_team, do: "#{@current_team.name} Member", else: "Team Member"
+              :spectator -> "Spectator"
+              _ -> "Viewer"
+            end}
+          </div>
+        </div>
+
+        <!-- Timer & Status Info (Desktop) -->
+        <div class="hidden lg:flex items-center space-x-4 shrink-0">
+          <!-- Compact Timer -->
+          <.compact_timer
+            timer_state={@timer_state}
+            current_team={get_timer_team(@timer_state, @draft)}
+          />
+
+          <!-- Status Info -->
+          <div class="text-right">
+            <div class="text-xs sm:text-sm text-slate-400">
+              <span class={[
+                "font-medium",
+                case @current_phase do
+                  :draft_starting -> "text-blue-400"
+                  :draft_paused -> "text-orange-400"
+                  :picking -> "text-green-400"
+                  :draft_complete -> "text-purple-400"
+                  _ -> "text-yellow-400"
+                end
+              ]}>
+                <%= case @current_phase do %>
+                  <% :draft_starting -> %>Ready to Start
+                  <% :draft_paused -> %>Paused
+                  <% :picking -> %>Pick Phase
+                  <% :draft_complete -> %>Draft Complete
+                <% end %>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subtitle -->
+      <div class="text-slate-400 text-xs sm:text-sm mb-4">
+        Draft Room • {@draft.format} • Player Draft
+      </div>
+
+      <!-- Controls Section -->
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <!-- Mobile Chat Toggle (hidden on large screens where sidebar is visible) -->
+        <button class="lg:hidden bg-slate-700 text-slate-300 hover:bg-slate-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fill-rule="evenodd"
+              d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <span>Chat</span>
+        </button>
+
+        <!-- Team Controls (Captain Only) -->
+        <%= if @user_role == :captain && @current_team do %>
+          <button
+            phx-click="toggle_team_ready"
+            class={[
+              "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              if(@current_team.is_ready,
+                do: "bg-green-500/20 text-green-400 hover:bg-green-500/30 ring-2 ring-green-500",
+                else: "bg-slate-700 text-slate-300 hover:bg-slate-600"
+              )
+            ]}
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <%= if @current_team.is_ready do %>
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              <% else %>
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              <% end %>
+            </svg>
+            <span class="hidden sm:inline">{if @current_team.is_ready, do: "Ready ✓", else: "Mark Ready"}</span>
+            <span class="sm:hidden">{if @current_team.is_ready, do: "✓", else: "Ready"}</span>
+          </button>
+
+          <button
+            phx-click="share_team_link"
+            class="flex items-center space-x-2 px-3 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-sm font-medium transition-colors"
+            title="Share team member link with your teammates"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/>
+            </svg>
+            <span class="hidden sm:inline">Share</span>
+          </button>
+
+          <button
+            phx-click="toggle_queue_view"
+            class={[
+              "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              if(@show_queue_view,
+                do: "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30",
+                else: "bg-slate-700 text-slate-300 hover:bg-slate-600"
+              )
+            ]}
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+              <path fill-rule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 001 1h6a1 1 0 001-1V3a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+            </svg>
+            <%
+            # Show team-specific count for captains/members, global count for organizers
+            queue_count = if @user_role == :organizer do
+              length(@queued_picks || [])
+            else
+              length(@team_queued_picks || [])
+            end
+            %>
+            <span class="hidden sm:inline">Queue ({queue_count})</span>
+            <span class="sm:hidden">({queue_count})</span>
+          </button>
+        <% end %>
+
+        <!-- Organizer Draft Controls -->
+        <%= if @user_role == :organizer do %>
+          <%= case @draft.status do %>
+            <% :setup -> %>
+              <button
+                phx-click="start_draft"
+                class="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+              >
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <span class="hidden sm:inline">Start Draft</span>
+                <span class="sm:hidden">Start</span>
+              </button>
+            <% :active -> %>
+              <button
+                phx-click="stop_draft"
+                class="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+              >
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <span class="hidden sm:inline">Pause Draft</span>
+                <span class="sm:hidden">Pause</span>
+              </button>
+            <% :paused -> %>
+              <button
+                phx-click="resume_draft"
+                class="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+              >
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <span class="hidden sm:inline">Resume Draft</span>
+                <span class="sm:hidden">Resume</span>
+              </button>
+            <% :completed -> %>
+              <!-- No controls for completed draft -->
+          <% end %>
+
+          <%= if @draft.status in [:setup, :paused, :active] do %>
+            <button
+              phx-click="open_advanced_modal"
+              class="flex items-center space-x-2 px-3 py-2 bg-slate-600 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-500 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+              </svg>
+              <span class="hidden sm:inline">Advanced Options</span>
+              <span class="sm:hidden">Options</span>
+            </button>
+          <% end %>
+
+          <!-- Team Order Controls (Setup/Paused only) -->
+          <%= if @draft.status in [:setup, :paused] and length(@draft.teams) > 1 do %>
+            <button
+              phx-click="open_team_order_modal"
+              class="flex items-center space-x-2 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <span class="hidden sm:inline">Team Order</span>
+              <span class="sm:hidden">Order</span>
+            </button>
+          <% end %>
+
+          <!-- Timeline Scrubber & Rollback Controls (Active/Paused drafts with picks) -->
+          <%= if @draft.status in [:active, :paused] and @current_pick_number > 0 do %>
+            <button
+              phx-click="open_timeline_modal"
+              class="flex items-center space-x-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <span class="hidden sm:inline">Timeline</span>
+              <span class="sm:hidden">Timeline</span>
+            </button>
+          <% end %>
+        <% end %>
+
+        <!-- Toggle Rosters Button -->
+        <button
+          phx-click="toggle_team_rosters"
+          class={[
+            "flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+            if(@show_team_rosters,
+              do: "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30",
+              else: "bg-slate-700 text-slate-300 hover:bg-slate-600"
+            )
+          ]}
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+          </svg>
+          <span class="hidden sm:inline">{if @show_team_rosters, do: "Hide Rosters", else: "Show Rosters"}</span>
+          <span class="sm:hidden">{if @show_team_rosters, do: "Hide", else: "Show"}</span>
+        </button>
+
+        <%!-- Audio Controls (temporarily hidden - implementation complete) --%>
+        <%!--
+        <div class="flex items-center space-x-2" phx-hook="AudioManager" id="audio-manager">
+          <!-- Mute/Unmute Button -->
+          <button
+            phx-click="toggle_audio_mute"
+            class={[
+              "flex items-center justify-center w-10 h-10 rounded-lg transition-colors",
+              if(@audio_muted,
+                do: "bg-red-500/20 text-red-400 hover:bg-red-500/30",
+                else: "bg-slate-700 text-slate-300 hover:bg-slate-600"
+              )
+            ]}
+            title={if @audio_muted, do: "Unmute Audio", else: "Mute Audio"}
+          >
+            <%= if @audio_muted do %>
+              <.icon name="hero-speaker-x-mark" class="w-5 h-5" />
+            <% else %>
+              <.icon name="hero-speaker-wave" class="w-5 h-5" />
+            <% end %>
+          </button>
+
+          <!-- Volume Slider (Desktop Only) -->
+          <form phx-change="set_audio_volume" class="hidden md:flex items-center space-x-2">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={@audio_volume}
+              name="volume"
+              class="w-16 lg:w-20 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+              title="Volume: {@audio_volume}%"
+            />
+            <span class="text-xs text-slate-400 w-8">{@audio_volume}%</span>
+          </form>
+
+          <!-- Test Audio Button (hidden on mobile) -->
+          <button
+            phx-click="test_audio"
+            class="hidden lg:flex items-center justify-center w-8 h-8 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors group"
+            title="Test Audio - Click to play a sample notification sound"
+          >
+            <.icon name="hero-play" class="w-4 h-4" />
+            <!-- Audio Attribution Tooltip -->
+            <div class="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 hidden group-hover:block z-50">
+              <div class="bg-slate-800 text-slate-200 text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                Audio: Synthetic Web Audio API generation
+              </div>
+            </div>
+          </button>
+        </div>
+        --%>
+      </div>
+    </div>
+
+    <!-- Timer Alert Section -->
+    <div class="px-4 sm:px-6">
+      <.timer_alert timer_state={@timer_state} class="mb-4" />
+    </div>
+
+    <!-- Compact Timer Info Bar (when active) -->
+    <%= if @timer_state.status in [:running, :paused, :expired] do %>
+      <div class="bg-slate-800 border-b border-slate-700 px-4 sm:px-6 py-3">
+        <div class="flex items-center justify-between">
+          <!-- Timer Info with Medium Timer -->
+          <div class="flex items-center space-x-4">
+            <.timer
+              timer_state={@timer_state}
+              current_team={get_timer_team(@timer_state, @draft)}
+              size="small"
+              show_team_name={false}
+            />
+
+            <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0">
+              <div class="text-white font-semibold">
+                <%= if @timer_state.current_team_id do %>
+                  <%= get_timer_team(@timer_state, @draft).name %>'s Turn
+                <% else %>
+                  Draft Timer
+                <% end %>
+              </div>
+              <div class="text-sm text-slate-400">
+                Pick {get_current_pick_order(@draft)} of {length(@draft.teams) * 5} • {format_duration(@draft.pick_timer_seconds)} per pick
+              </div>
+            </div>
+          </div>
+
+          <!-- Timer Controls (Organizer Only) -->
+          <%= if @user_role == :organizer and @timer_state.status in [:running, :paused, :expired] do %>
+            <div class="flex items-center space-x-2">
+              <%= if @timer_state.status == :running do %>
+                <button
+                  phx-click="pause_timer"
+                  class="flex items-center space-x-1 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm"
+                >
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                  </svg>
+                  <span class="hidden sm:inline">Pause</span>
+                </button>
+              <% else %>
+                <button
+                  phx-click="resume_timer"
+                  class="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
+                >
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                  </svg>
+                  <span class="hidden sm:inline">Resume</span>
+                </button>
+              <% end %>
+
+              <button
+                phx-click="reset_timer"
+                class="flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+              >
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+                </svg>
+                <span class="hidden sm:inline">Reset</span>
+              </button>
+
+              <button
+                phx-click="stop_timer"
+                class="flex items-center space-x-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+              >
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm4-8a1 1 0 11-2 0 1 1 0 012 0zm-4 4a1 1 0 100-2 1 1 0 000 2zm-4-4a1 1 0 11-2 0 1 1 0 012 0z" clip-rule="evenodd"/>
+                </svg>
+                <span class="hidden sm:inline">Stop</span>
+              </button>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+<!-- Scrollable Content Area -->
+    <div class="flex-1 overflow-y-auto">
+      <!-- Draft Progress Bar -->
+      <div class="bg-slate-800 border-b border-slate-700 p-3 sm:p-4 overflow-x-auto">
+        <div class="space-y-3">
+          <!-- Progress Header -->
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-2 sm:space-y-0">
+            <h2 class="text-base sm:text-lg font-semibold text-yellow-400">📋 Draft Progress</h2>
+            <div class="text-xs sm:text-sm text-slate-400">
+              <%= if @current_phase == :picking do %>
+                Pick {@current_pick_order} of {length(@draft.teams) * 5}
+              <% else %>
+                <%= case @current_phase do %>
+                  <% :draft_starting -> %>
+                    Ready to Start
+                  <% :draft_paused -> %>
+                    Draft Paused
+                  <% :draft_complete -> %>
+                    Draft Complete
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+
+<!-- Pick Order Timeline -->
+          <% draft_order =
+            AceApp.Drafts.Formats.SnakeDraft.generate_full_draft_order(@draft.teams) %>
+          <% picks_by_number = Enum.group_by(@draft.picks, & &1.pick_number) %>
+          <% current_pick_number = @current_pick_order %>
+
+          <div id="draft-progress-container" class="overflow-x-auto scroll-smooth" phx-hook="DraftProgressScroll">
+            <div class="flex space-x-1 sm:space-x-2 min-w-max pb-2">
+              <%= for pick_slot <- draft_order do %>
+                <% pick = Map.get(picks_by_number, pick_slot.pick_number, []) |> List.first() %>
+                <% is_current_pick =
+                  @current_phase == :picking && pick_slot.pick_number == current_pick_number %>
+              <% team_color =
+                case rem(pick_slot.team.pick_order_position - 1, 10) do
+                  0 -> "blue"
+                  1 -> "red"
+                  2 -> "green"
+                  3 -> "purple"
+                  4 -> "orange"
+                  5 -> "pink"
+                  6 -> "indigo"
+                  7 -> "cyan"
+                  8 -> "amber"
+                  9 -> "emerald"
+                end %>
+
+              <div
+                id={if is_current_pick, do: "current-pick-#{pick_slot.pick_number}", else: nil}
+                class={[
+                  "flex-shrink-0 relative group transition-all duration-300",
+                  if(is_current_pick, do: "animate-pulse scale-110", else: "")
+                ]}>
+                <!-- Pick slot -->
+                <div class={[
+                  "w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 flex flex-col items-center justify-center text-xs relative",
+                  case {pick, is_current_pick} do
+                    {nil, true} ->
+                      "border-yellow-400 bg-yellow-500/20 ring-2 ring-yellow-400"
+
+                    {nil, false} ->
+                      "border-slate-600 bg-slate-700"
+
+                    {_, _} ->
+                      case team_color do
+                        "blue" -> "border-blue-400 bg-blue-500/20"
+                        "red" -> "border-red-400 bg-red-500/20"
+                        "green" -> "border-green-400 bg-green-500/20"
+                        "purple" -> "border-purple-400 bg-purple-500/20"
+                        "orange" -> "border-orange-400 bg-orange-500/20"
+                        "pink" -> "border-pink-400 bg-pink-500/20"
+                        "indigo" -> "border-indigo-400 bg-indigo-500/20"
+                        "cyan" -> "border-cyan-400 bg-cyan-500/20"
+                        "amber" -> "border-amber-400 bg-amber-500/20"
+                        "emerald" -> "border-emerald-400 bg-emerald-500/20"
+                      end
+                  end
+                ]}>
+                  <%= if pick do %>
+                    <!-- Player picked -->
+                    <div class={[
+                      "w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white font-bold text-xs",
+                      case team_color do
+                        "blue" -> "bg-gradient-to-br from-blue-500 to-blue-600"
+                        "red" -> "bg-gradient-to-br from-red-500 to-red-600"
+                        "green" -> "bg-gradient-to-br from-green-500 to-green-600"
+                        "purple" -> "bg-gradient-to-br from-purple-500 to-purple-600"
+                        "orange" -> "bg-gradient-to-br from-orange-500 to-orange-600"
+                        "pink" -> "bg-gradient-to-br from-pink-500 to-pink-600"
+                        "indigo" -> "bg-gradient-to-br from-indigo-500 to-indigo-600"
+                        "cyan" -> "bg-gradient-to-br from-cyan-500 to-cyan-600"
+                        "amber" -> "bg-gradient-to-br from-amber-500 to-amber-600"
+                        "emerald" -> "bg-gradient-to-br from-emerald-500 to-emerald-600"
+                      end
+                    ]}>
+                      {safe_player_initial(pick.player)}
+                    </div>
+                    <div class="text-xs text-slate-400 mt-0.5 sm:mt-1 hidden sm:block">
+                      {pick_slot.pick_number}
+                    </div>
+                  <% else %>
+                    <!-- Empty slot -->
+                    <div class={[
+                      "w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-medium border-2",
+                      case {is_current_pick, team_color} do
+                        {true, _} -> "border-yellow-400 text-yellow-400"
+                        {false, "blue"} -> "border-blue-500 text-blue-400"
+                        {false, "red"} -> "border-red-500 text-red-400"
+                        {false, "green"} -> "border-green-500 text-green-400"
+                        {false, "purple"} -> "border-purple-500 text-purple-400"
+                        {false, "orange"} -> "border-orange-500 text-orange-400"
+                        {false, "pink"} -> "border-pink-500 text-pink-400"
+                        {false, "indigo"} -> "border-indigo-500 text-indigo-400"
+                        {false, "cyan"} -> "border-cyan-500 text-cyan-400"
+                        {false, "amber"} -> "border-amber-500 text-amber-400"
+                        {false, "emerald"} -> "border-emerald-500 text-emerald-400"
+                      end
+                    ]}>
+                      {pick_slot.pick_number}
+                    </div>
+                    <div class="text-xs text-slate-500 mt-0.5 sm:mt-1 hidden sm:block">
+                      {String.slice(pick_slot.team.name, 0, 4)}
+                    </div>
+                  <% end %>
+                </div>
+
+<!-- Tooltip on hover -->
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  <div class="bg-slate-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap border border-slate-600">
+                    Pick {pick_slot.pick_number}: {pick_slot.team.name}
+                    <%= if pick do %>
+                      <br /><strong>{pick.player.display_name}</strong>
+                    <% end %>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+            </div>
+          </div>
+
+<!-- Round indicators -->
+          <div class="flex space-x-1 sm:space-x-2 min-w-max">
+            <%= for round <- 1..5 do %>
+              <div
+                class="flex items-center justify-center text-xs text-slate-500"
+                style={"width: #{length(@draft.teams) * (if length(@draft.teams) <= 4, do: 3, else: 2.5)}rem"}
+              >
+                <span class="hidden sm:inline">Round </span>R{round}
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+
+<!-- Team Rosters Section -->
+      <%= if @show_team_rosters do %>
+        <div class="bg-slate-800 border-b border-slate-700 p-3 sm:p-4">
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-2 sm:space-y-0">
+            <h2 class="text-base sm:text-lg font-semibold text-yellow-400">👥 Team Rosters</h2>
+            <div class="text-xs sm:text-sm text-slate-400">
+              {length(@draft.picks)} of {length(@draft.teams) * 5} picks made
+            </div>
+          </div>
+
+          <div class={[
+            "grid gap-3 sm:gap-4",
+            case length(@draft.teams) do
+              2 -> "grid-cols-1 sm:grid-cols-2"
+              3 -> "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              4 -> "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+              _ -> "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            end
+          ]}>
+            <%= for {team, team_index} <- Enum.with_index(Enum.sort_by(@draft.teams, &(&1.pick_order_position))) do %>
+              <% team_picks =
+                Enum.filter(@draft.picks, fn p -> p.team_id == team.id end)
+                |> Enum.sort_by(& &1.pick_number) %>
+              <% is_current_team =
+                @current_phase == :picking && get_current_team_to_pick(@draft) &&
+                  get_current_team_to_pick(@draft).id == team.id %>
+              <% team_color =
+                case rem(team.pick_order_position - 1, 10) do
+                  0 -> "blue"
+                  1 -> "red"
+                  2 -> "green"
+                  3 -> "purple"
+                  4 -> "orange"
+                  5 -> "pink"
+                  6 -> "indigo"
+                  7 -> "cyan"
+                  8 -> "amber"
+                  9 -> "emerald"
+                end %>
+
+              <div class={[
+                "bg-slate-700 rounded-lg p-4",
+                if(is_current_team, do: "ring-2 ring-yellow-500", else: "")
+              ]}>
+                <!-- Team Header -->
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class={[
+                    "text-sm font-medium flex items-center space-x-2",
+                    if(is_current_team, do: "text-yellow-400", else: "text-slate-300")
+                  ]}>
+                    <!-- Team Logo or Fallback -->
+                    <div class="relative">
+                      <%= if team.logo_url do %>
+                        <img
+                          src={team.logo_url}
+                          alt="{team.name} logo"
+                          class="w-6 h-6 rounded object-cover shadow-sm border border-slate-600"
+                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                        />
+                      <% end %>
+                      <!-- Fallback Logo with Team Color -->
+                      <div class={[
+                        "w-6 h-6 rounded flex items-center justify-center text-white font-bold text-xs shadow-sm",
+                        if(team.logo_url, do: "hidden", else: "flex"),
+                        case team_color do
+                          "blue" -> "bg-gradient-to-br from-blue-500 to-blue-600"
+                          "red" -> "bg-gradient-to-br from-red-500 to-red-600"
+                          "green" -> "bg-gradient-to-br from-green-500 to-green-600"
+                          "purple" -> "bg-gradient-to-br from-purple-500 to-purple-600"
+                          "orange" -> "bg-gradient-to-br from-orange-500 to-orange-600"
+                          "pink" -> "bg-gradient-to-br from-pink-500 to-pink-600"
+                          "indigo" -> "bg-gradient-to-br from-indigo-500 to-indigo-600"
+                          "cyan" -> "bg-gradient-to-br from-cyan-500 to-cyan-600"
+                          "amber" -> "bg-gradient-to-br from-amber-500 to-amber-600"
+                          "emerald" -> "bg-gradient-to-br from-emerald-500 to-emerald-600"
+                          _ -> "bg-gradient-to-br from-slate-500 to-slate-600"
+                        end
+                      ]}>
+                        {team.pick_order_position}
+                      </div>
+                    </div>
+                    <span>{team.name}</span>
+                    <%= if team.is_ready do %>
+                      <span class="text-green-400">✓</span>
+                    <% else %>
+                      <span class="text-slate-500">◯</span>
+                    <% end %>
+                  </h3>
+                  <div class="flex items-center space-x-2">
+                    <%= if @current_phase == :draft_starting do %>
+                      <div class={[
+                        "text-xs px-2 py-1 rounded font-medium",
+                        if(team.is_ready,
+                          do: "bg-green-500/20 text-green-400",
+                          else: "bg-slate-600 text-slate-400"
+                        )
+                      ]}>
+                        {if team.is_ready, do: "Ready", else: "Not Ready"}
+                      </div>
+                    <% end %>
+                    <div class={[
+                      "text-xs px-2 py-1 rounded",
+                      case team_color do
+                        "blue" -> "bg-blue-500/20 text-blue-400"
+                        "red" -> "bg-red-500/20 text-red-400"
+                        "green" -> "bg-green-500/20 text-green-400"
+                        "purple" -> "bg-purple-500/20 text-purple-400"
+                        "orange" -> "bg-orange-500/20 text-orange-400"
+                        "pink" -> "bg-pink-500/20 text-pink-400"
+                        "indigo" -> "bg-indigo-500/20 text-indigo-400"
+                        "cyan" -> "bg-cyan-500/20 text-cyan-400"
+                        "amber" -> "bg-amber-500/20 text-amber-400"
+                        "emerald" -> "bg-emerald-500/20 text-emerald-400"
+                      end
+                    ]}>
+                      {length(team_picks)}/5
+                    </div>
+                  </div>
+                </div>
+
+<!-- Team Picks -->
+                <div class="space-y-2">
+                  <%= for i <- 1..5 do %>
+                    <% pick = Enum.at(team_picks, i - 1) %>
+                    <div class={[
+                      "flex items-center space-x-3 p-2 rounded",
+                      if(pick,
+                        do: "bg-slate-600",
+                        else: "bg-slate-800 border border-slate-600 border-dashed"
+                      )
+                    ]}>
+                      <div class={[
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium",
+                        if(pick,
+                          do:
+                            case team_color do
+                              "blue" -> "bg-gradient-to-br from-blue-500 to-blue-600 text-white"
+                              "red" -> "bg-gradient-to-br from-red-500 to-red-600 text-white"
+                              "green" -> "bg-gradient-to-br from-green-500 to-green-600 text-white"
+                              "purple" -> "bg-gradient-to-br from-purple-500 to-purple-600 text-white"
+                              "orange" -> "bg-gradient-to-br from-orange-500 to-orange-600 text-white"
+                              "pink" -> "bg-gradient-to-br from-pink-500 to-pink-600 text-white"
+                              "indigo" -> "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white"
+                              "cyan" -> "bg-gradient-to-br from-cyan-500 to-cyan-600 text-white"
+                              "amber" -> "bg-gradient-to-br from-amber-500 to-amber-600 text-white"
+                              "emerald" -> "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white"
+                            end,
+                          else: "bg-slate-700 text-slate-500"
+                        )
+                      ]}>
+                        <%= if pick do %>
+                          {safe_player_initial(pick.player)}
+                        <% else %>
+                          {i}
+                        <% end %>
+                      </div>
+
+                      <%= if pick do %>
+                        <div class="flex-1 min-w-0">
+                          <div class="text-sm font-medium text-slate-200 truncate">
+                            {safe_player_name(pick.player)}
+                          </div>
+                          <div class="flex items-center space-x-1">
+                            <%= for role <- Enum.take(pick.player.preferred_roles || [], 2) do %>
+                              <span class="text-xs bg-slate-500 px-1 py-0.5 rounded text-slate-300">
+                                {role_display_name(role)}
+                              </span>
+                            <% end %>
+                          </div>
+                        </div>
+                        <div class="text-xs text-slate-400">
+                          #{pick.pick_number}
+                        </div>
+                      <% else %>
+                        <div class="flex-1 text-slate-500 text-sm">
+                          <%= if is_current_team && i == length(team_picks) + 1 do %>
+                            <span class="text-yellow-400">Next pick...</span>
+                          <% else %>
+                            Waiting...
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+
+<!-- Main Content Area -->
+      <div class="flex-1">
+        <!-- Search and Filters -->
+        <div class="bg-slate-800 border-b border-slate-700 p-3 sm:p-4">
+          <div class="flex flex-col lg:flex-row space-y-3 lg:space-y-0 lg:space-x-4 lg:items-center">
+            <!-- Search -->
+            <div class="flex-1">
+              <form phx-change="search_players" phx-submit="search_players">
+                <input
+                  type="text"
+                  placeholder="Search players..."
+                  value={@search_term}
+                  phx-debounce="300"
+                  name="search"
+                  id="player-search"
+                  class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-slate-100 placeholder-slate-400 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500"
+                />
+              </form>
+            </div>
+
+<!-- Role Filters -->
+            <div class="flex flex-wrap gap-2">
+              <%= for role <- ["all", "top", "jungle", "mid", "adc", "support"] do %>
+                <button
+                  phx-click="filter_by_role"
+                  phx-value-role={role}
+                  class={[
+                    "px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-medium transition-colors flex-shrink-0",
+                    if(@selected_role == role,
+                      do: "bg-yellow-500 text-slate-900",
+                      else: "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    )
+                  ]}
+                >
+                  {role_display_name(role)}
+                </button>
+              <% end %>
+            </div>
+          </div>
+        </div>
+
+<!-- Player Grid -->
+        <div
+          class="overflow-y-auto p-3 sm:p-6"
+          style={"height: calc(100vh - #{if @show_team_rosters, do: "450px", else: "280px"});"}
+        >
+          <%= if @filtered_players && is_list(@filtered_players) do %>
+            <div class="text-xs sm:text-sm text-slate-400 mb-3 sm:mb-4">
+              {length(@filtered_players)} available players
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+              <%= for player <- @filtered_players, player != nil && is_map(player) do %>
+                <% current_team = get_current_team_to_pick(@draft) %>
+                <% is_player_turn = @current_phase == :picking && current_team != nil %>
+                <% is_queued_by_team = Enum.any?(@team_queued_picks || [], fn pick -> pick.player_id == player.id end) %>
+                <% queued_position = Enum.find_value(@team_queued_picks || [], fn pick ->
+                     if pick.player_id == player.id, do: pick.queue_position, else: nil
+                   end) %>
+                <button
+                  :if={is_player_turn}
+                  phx-click="select_player"
+                  phx-value-player_id={player.id}
+                  class={[
+                    "group relative rounded-lg p-3 sm:p-4 transition-all duration-200 focus:ring-2 focus:outline-none text-left transform hover:scale-105",
+                    cond do
+                      is_queued_by_team ->
+                        "bg-blue-800 ring-2 ring-blue-500 shadow-lg shadow-blue-500/25"
+
+                      @selected_player_id == player.id ->
+                        "bg-blue-600 ring-2 ring-blue-400 shadow-lg shadow-blue-500/25"
+
+                      true ->
+                        "bg-slate-700 hover:bg-slate-600 focus:ring-yellow-500"
+                    end
+                  ]}
+                >
+                  <!-- Player Avatar/Icon -->
+                  <div class="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-slate-900 font-bold text-sm sm:text-xl mb-2 sm:mb-3 mx-auto">
+                    {safe_player_initial(player)}
+                  </div>
+
+<!-- Player Name -->
+                  <div class="text-xs sm:text-sm font-medium text-center mb-1 sm:mb-2 truncate">
+                    {safe_player_name(player)}
+                  </div>
+
+<!-- Preferred Roles -->
+                  <div class="flex justify-center flex-wrap gap-1 mb-1 sm:mb-2">
+                    <%= for role <- Enum.take(player.preferred_roles || [], 2) do %>
+                      <span class="text-xs bg-slate-600 px-1 sm:px-2 py-0.5 sm:py-1 rounded">
+                        {role_display_name(role)}
+                      </span>
+                    <% end %>
+                  </div>
+
+<!-- Player Accounts Summary -->
+                  <%= if length(player.player_accounts || []) > 0 do %>
+                    <% primary_account = List.first(player.player_accounts || []) %>
+                    <div class="text-xs text-slate-400 text-center">
+                      {String.capitalize(to_string(primary_account.rank_tier || "unranked"))}
+                      <%= if primary_account.rank_division do %>
+                        {String.upcase(to_string(primary_account.rank_division))}
+                      <% end %>
+                    </div>
+                  <% else %>
+                    <div class="text-xs text-slate-400 text-center">Unranked</div>
+                  <% end %>
+
+<!-- Queue Indicator -->
+                  <%= if is_queued_by_team do %>
+                    <div class="absolute top-1 right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                      <div class="text-white text-xs font-bold">{queued_position}</div>
+                    </div>
+                  <% end %>
+
+<!-- Hover Effect -->
+                  <div class="absolute inset-0 bg-yellow-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  </div>
+                </button>
+
+<!-- Disabled state when not current turn -->
+                <div
+                  :if={not is_player_turn}
+                  class={[
+                    "relative rounded-lg p-3 sm:p-4 opacity-75 text-left transition-all duration-200",
+                    if(is_queued_by_team,
+                      do: "bg-blue-800 ring-2 ring-blue-600",
+                      else: "bg-slate-700"
+                    )
+                  ]}
+                >
+                  <!-- Player Avatar/Icon -->
+                  <div class="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-slate-500 to-slate-600 rounded-full flex items-center justify-center text-slate-300 font-bold text-sm sm:text-xl mb-2 sm:mb-3 mx-auto">
+                    {safe_player_initial(player)}
+                  </div>
+
+<!-- Player Name -->
+                  <div class="text-xs sm:text-sm font-medium text-center mb-1 sm:mb-2 text-slate-400 truncate">
+                    {safe_player_name(player)}
+                  </div>
+
+<!-- Preferred Roles -->
+                  <div class="flex justify-center flex-wrap gap-1 mb-1 sm:mb-2">
+                    <%= for role <- Enum.take(player.preferred_roles || [], 2) do %>
+                      <span class="text-xs bg-slate-600 px-1 sm:px-2 py-0.5 sm:py-1 rounded text-slate-400">
+                        {role_display_name(role)}
+                      </span>
+                    <% end %>
+                  </div>
+
+<!-- Player Accounts Summary -->
+                  <%= if length(player.player_accounts || []) > 0 do %>
+                    <% primary_account = List.first(player.player_accounts || []) %>
+                    <div class="text-xs text-slate-500 text-center">
+                      {String.capitalize(to_string(primary_account.rank_tier || "unranked"))}
+                      <%= if primary_account.rank_division do %>
+                        {String.upcase(to_string(primary_account.rank_division))}
+                      <% end %>
+                    </div>
+                  <% else %>
+                    <div class="text-xs text-slate-500 text-center">Unranked</div>
+                  <% end %>
+
+<!-- Queue Indicator for disabled state -->
+                  <%= if is_queued_by_team do %>
+                    <div class="absolute top-1 right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                      <.icon name="hero-clock" class="w-3 h-3 text-white" />
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+
+            <%= if length(@filtered_players) == 0 do %>
+              <div class="text-center py-12">
+                <div class="text-slate-400 text-lg mb-2">No players found</div>
+                <div class="text-slate-500 text-sm">Try adjusting your search or filters</div>
+              </div>
+            <% end %>
+          <% else %>
+            <div class="text-center py-12">
+              <div class="text-slate-400 text-lg mb-2">Loading players...</div>
+            </div>
+          <% end %>
+
+<!-- Pick Confirmation Section -->
+          <%= if @selected_player_id do %>
+            <% selected_player = Enum.find(@filtered_players, &(&1.id == @selected_player_id)) %>
+            <%= if selected_player do %>
+              <div class="sticky bottom-0 bg-slate-800/95 backdrop-blur border-t border-slate-700 p-4 mt-6">
+                <div class="flex items-center justify-between max-w-md mx-auto">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-slate-900 font-bold">
+                      {safe_player_initial(selected_player)}
+                    </div>
+                    <div>
+                      <div class="font-medium text-white">{selected_player.display_name}</div>
+                      <% next_team = AceApp.Drafts.get_next_team_to_pick(@draft) %>
+                      <div class="text-sm text-slate-400">
+                        <%= if @current_team && next_team && @current_team.id == next_team.id do %>
+                          Ready to pick immediately
+                        <% else %>
+                          Will be queued for your turn
+                        <% end %>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      phx-click="select_player"
+                      phx-value-player_id=""
+                      class="px-3 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <% next_team = AceApp.Drafts.get_next_team_to_pick(@draft) %>
+                    <% is_immediate_pick =
+                      @current_team && next_team && @current_team.id == next_team.id %>
+                    <button
+                      phx-click="confirm_pick"
+                      class={[
+                        "px-6 py-2 text-white font-medium rounded-lg transition-colors focus:ring-2 focus:outline-none",
+                        if(is_immediate_pick,
+                          do: "bg-green-600 hover:bg-green-700 focus:ring-green-500",
+                          else: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+                        )
+                      ]}
+                    >
+                      <%= if is_immediate_pick do %>
+                        <.icon name="hero-check" class="w-4 h-4" />
+                        <span>Confirm Pick</span>
+                      <% else %>
+                        <.icon name="hero-clock" class="w-4 h-4" />
+                        <span>Queue Pick</span>
+                      <% end %>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Chat Sidebar -->
+  <div class="hidden lg:flex w-80 bg-slate-800 border-l border-slate-700 flex-col">
+    <div class="p-4 border-b border-slate-700">
+      <h2 class="text-lg font-semibold text-yellow-400 flex items-center space-x-2">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path
+            fill-rule="evenodd"
+            d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+            clip-rule="evenodd"
+          />
+        </svg>
+        <span>💬 Chat</span>
+      </h2>
+    </div>
+
+    <div class="flex-1 min-h-0">
+      <.live_component
+        module={AceAppWeb.Components.Chat}
+        id="draft-chat"
+        draft={@draft}
+        user_role={@user_role}
+        current_team={@current_team}
+      />
+    </div>
+  </div>
+</div>
+
+<!-- Queue View Modal -->
+<%= if @show_queue_view do %>
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-slate-800 rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-yellow-400">📋 Draft Queue</h2>
+        <div class="flex items-center space-x-3">
+          <!-- Clear Queue Button (for team members with queued picks) -->
+          <%= if @current_team && length(@team_queued_picks || []) > 0 do %>
+            <button
+              phx-click="clear_team_queue"
+              class={[
+                "px-3 py-1 rounded text-sm font-medium transition-colors",
+                if(length(@team_queued_picks || []) > 1,
+                  do: "bg-red-600 text-white hover:bg-red-700",
+                  else: "text-red-400 hover:text-red-300"
+                )
+              ]}
+              data-confirm="Are you sure you want to clear all queued picks for your team?"
+            >
+              Clear Queue (<%= length(@team_queued_picks || []) %>)
+            </button>
+          <% end %>
+
+          <button
+            phx-click="toggle_queue_view"
+            class="text-slate-400 hover:text-white transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <%= if length(@queued_picks || []) > 0 do %>
+        <%
+        # Show all picks to organizers, only current team's picks to team members
+        visible_picks = if @user_role == :organizer do
+          @queued_picks || []
+        else
+          (@team_queued_picks || [])
+        end
+        grouped_picks = if @user_role == :organizer do
+          Enum.group_by(visible_picks, fn pick -> pick.team end)
+        else
+          if @current_team, do: %{@current_team => visible_picks}, else: %{}
+        end
+        %>
+        <%= if length(visible_picks) > 0 do %>
+          <div class="space-y-4">
+            <%= for {team, team_picks} <- grouped_picks do %>
+            <div class="bg-slate-700/50 rounded-lg p-4">
+              <h3 class="text-lg font-medium text-yellow-400 mb-3 flex items-center space-x-2">
+                <!-- Team Logo -->
+                <div class="relative">
+                  <%= if team.logo_url do %>
+                    <img
+                      src={team.logo_url}
+                      alt="{team.name} logo"
+                      class="w-6 h-6 rounded object-cover shadow-sm border border-yellow-400/50"
+                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                    />
+                  <% end %>
+                  <!-- Fallback Logo -->
+                  <div class={[
+                    "w-6 h-6 rounded flex items-center justify-center text-white font-bold text-xs shadow-sm bg-gradient-to-br from-yellow-500 to-yellow-600",
+                    if(team.logo_url, do: "hidden", else: "flex")
+                  ]}>
+                    {team.pick_order_position}
+                  </div>
+                </div>
+                <span>{team.name}</span>
+              </h3>
+              <div class="space-y-2">
+                <%= for queued_pick <- Enum.sort_by(team_picks, &(&1.queue_position)) do %>
+                  <div class="flex items-center justify-between p-3 bg-slate-700 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                      <span class="text-blue-400 font-medium">#{queued_pick.queue_position}</span>
+                      <div>
+                        <div class="text-white font-medium">{queued_pick.player.display_name}</div>
+                        <%= if queued_pick.champion do %>
+                          <div class="text-sm text-slate-400">{queued_pick.champion.name}</div>
+                        <% end %>
+                      </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                      <span class="text-xs text-blue-400 bg-blue-900/30 px-2 py-1 rounded">
+                        Queued {DateTime.from_naive!(queued_pick.queued_at, "Etc/UTC") |> Calendar.strftime("%H:%M")}
+                      </span>
+                      <%= if @current_team && @current_team.id == team.id do %>
+                        <button
+                          phx-click="cancel_queue_pick"
+                          phx-value-pick-id={queued_pick.id}
+                          class="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Remove
+                        </button>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+          </div>
+        <% else %>
+          <div class="text-center py-8 text-slate-400">
+            <.icon name="hero-queue-list" class="w-12 h-12 mx-auto mb-4 text-slate-500" />
+            <p>No players queued yet</p>
+            <p class="text-sm mt-1">Select players to queue them for automatic picking</p>
+          </div>
+        <% end %>
+      <% else %>
+        <div class="text-center py-8 text-slate-400">
+          <.icon name="hero-queue-list" class="w-12 h-12 mx-auto mb-4 text-slate-500" />
+          <p>No players queued yet</p>
+          <p class="text-sm mt-1">Select players to queue them for automatic picking</p>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<!-- Timeline Modal -->
+<%= if @show_timeline_modal do %>
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" phx-click="close_timeline_modal">
+    <div class="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto" phx-click-away="close_timeline_modal" phx-window-keydown="close_timeline_modal" phx-key="escape" phx-click="js-noop">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Draft Timeline & Rollback</h2>
+        <button phx-click="close_timeline_modal" class="text-slate-400 hover:text-white">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Current Draft Status -->
+      <div class="mb-6 p-4 bg-slate-700 rounded-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Current Status</h3>
+            <p class="text-slate-300">Pick #{@current_pick_number} • {@draft.status}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-slate-400">Total Picks</p>
+            <p class="text-xl font-bold text-white">{@current_pick_number}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline Scrubber -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-white mb-3">Draft Timeline</h3>
+        <div class="bg-slate-700 rounded-lg p-4">
+          <form phx-change="timeline_scrub">
+            <div class="flex items-center space-x-2 mb-4">
+              <span class="text-sm text-slate-400">Pick 0</span>
+              <div class="flex-1 relative">
+                <input
+                  type="range"
+                  name="value"
+                  min="0"
+                  max={@current_pick_number}
+                  value={@timeline_position || @current_pick_number}
+                  class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                />
+                <div class="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>Start</span>
+                  <span>Current</span>
+                </div>
+              </div>
+              <span class="text-sm text-slate-400">Pick {@current_pick_number}</span>
+            </div>
+          </form>
+
+          <!-- Timeline Position Info -->
+          <div class="text-center">
+            <p class="text-sm text-slate-300">
+              Selected Position: <span class="font-semibold text-white">Pick #{@timeline_position || @current_pick_number}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rollback Controls -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-white mb-3">Rollback Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Rollback to Selected Position -->
+          <div class="bg-slate-700 rounded-lg p-4">
+            <h4 class="font-semibold text-white mb-2">Rollback to Position</h4>
+            <p class="text-sm text-slate-400 mb-3">Remove all picks after pick #{@timeline_position || @current_pick_number}</p>
+            <button
+              phx-click="rollback_to_pick"
+              phx-value-pick-number={@timeline_position || @current_pick_number}
+              class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              disabled={(@timeline_position || @current_pick_number) == @current_pick_number}
+            >
+              Rollback to Pick #{@timeline_position || @current_pick_number}
+            </button>
+          </div>
+
+          <!-- Undo Last Pick -->
+          <div class="bg-slate-700 rounded-lg p-4">
+            <h4 class="font-semibold text-white mb-2">Undo Last Pick</h4>
+            <p class="text-sm text-slate-400 mb-3">Remove only the most recent pick</p>
+            <button
+              phx-click="undo_last_pick"
+              class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              disabled={@current_pick_number == 0}
+            >
+              Undo Pick #{@current_pick_number}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Warning Notice -->
+      <div class="bg-yellow-900/50 border border-yellow-600 rounded-lg p-4">
+        <div class="flex items-start space-x-3">
+          <svg class="w-6 h-6 text-yellow-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          </svg>
+          <div>
+            <h4 class="font-semibold text-yellow-500 mb-1">Warning</h4>
+            <p class="text-sm text-yellow-200">
+              Rollback operations cannot be undone. All picks, team queues, and timer state after the selected position will be permanently removed.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Advanced Options Modal -->
+<%= if @show_advanced_modal do %>
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" phx-click="close_advanced_modal">
+    <div class="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-2xl w-full mx-4" phx-click-away="close_advanced_modal" phx-window-keydown="close_advanced_modal" phx-key="escape" phx-click="js-noop">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Advanced Organizer Options</h2>
+        <button phx-click="close_advanced_modal" class="text-slate-400 hover:text-white">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="space-y-6">
+        <!-- Draft Testing Section -->
+        <div class="border border-slate-600 rounded-lg p-4">
+          <h3 class="text-lg font-semibold text-yellow-400 mb-3">Draft Testing</h3>
+
+          <%= if @draft.status == :setup do %>
+            <div class="space-y-3">
+              <button
+                phx-click="preview_draft"
+                class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+              >
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                </svg>
+                <span>Preview Draft</span>
+              </button>
+              <p class="text-sm text-slate-400">
+                Automatically plays out the draft with random picks every 2 seconds. Perfect for testing visuals, overlays, and draft flow.
+              </p>
+            </div>
+          <% else %>
+            <div class="text-center py-3">
+              <p class="text-sm text-slate-400">Preview is only available before the draft starts</p>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Draft Management Section -->
+        <div class="border border-slate-600 rounded-lg p-4">
+          <h3 class="text-lg font-semibold text-red-400 mb-3">Draft Management</h3>
+
+          <div class="space-y-3">
+            <button
+              phx-click="reset_draft"
+              class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+              data-confirm="Are you sure? This will completely reset the draft while preserving teams and players."
+            >
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+              </svg>
+              <span>Reset Draft</span>
+            </button>
+            <p class="text-sm text-slate-400">
+              Completely resets the draft while preserving teams and players. Use this to start over.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end mt-6">
+        <button
+          phx-click="close_advanced_modal"
+          class="px-4 py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500 transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Team Order Modal -->
+<%= if @show_team_order_modal do %>
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" phx-click="close_team_order_modal">
+    <div class="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" phx-click-away="close_team_order_modal" phx-window-keydown="close_team_order_modal" phx-key="escape" phx-click="js-noop">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Team Pick Order</h2>
+        <button phx-click="close_team_order_modal" class="text-slate-400 hover:text-white">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Current Draft Status -->
+      <div class="mb-6 p-4 bg-slate-700 rounded-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Current Status</h3>
+            <p class="text-slate-300">Draft Format: {@draft.format} • Status: {@draft.status}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-slate-400">Total Teams</p>
+            <p class="text-xl font-bold text-white">{length(@draft.teams)}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Team List with Reorder Controls -->
+      <div class="space-y-3">
+        <h3 class="text-lg font-semibold text-white mb-3">Team Pick Order</h3>
+        <%= for {team, index} <- Enum.with_index(@draft.teams) do %>
+          <div
+            class="flex items-center justify-between p-4 bg-slate-700 rounded-lg border border-slate-600 cursor-move hover:bg-slate-600 transition-colors"
+            draggable="true"
+            data-team-id={team.id}
+            data-team-index={index}
+            ondragstart="handleTeamDragStart(event)"
+            ondragover="handleTeamDragOver(event)"
+            ondrop="handleTeamDrop(event)"
+            ondragend="handleTeamDragEnd(event)"
+          >
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-3">
+                <!-- Drag Handle -->
+                <div class="text-slate-400 hover:text-slate-300 cursor-move">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                  </svg>
+                </div>
+                <!-- Team Logo or Position Number -->
+                <div class="relative">
+                  <%= if team.logo_url do %>
+                    <img
+                      src={team.logo_url}
+                      alt="{team.name} logo"
+                      class="w-8 h-8 rounded-full object-cover shadow-md border-2 border-slate-500"
+                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                    />
+                  <% end %>
+                  <!-- Fallback with Pick Order Position -->
+                  <div class={[
+                    "w-8 h-8 bg-gradient-to-br from-yellow-500 to-yellow-600 text-slate-900 rounded-full flex items-center justify-center text-sm font-bold",
+                    if(team.logo_url, do: "hidden", else: "flex")
+                  ]}>
+                    {index + 1}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="font-bold text-white text-lg">{team.name}</div>
+                <div class="text-sm text-slate-400">
+                  Pick Order Position: #{team.pick_order_position} • <span class="text-slate-500">Drag to reorder</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <!-- Move Up Button -->
+              <%= if index > 0 do %>
+                <button
+                  phx-click="move_team_up"
+                  phx-value-team-id={team.id}
+                  class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  title="Move up in pick order"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              <% else %>
+                <div class="w-8 h-8"></div> <!-- Spacer for alignment -->
+              <% end %>
+
+              <!-- Move Down Button -->
+              <%= if index < length(@draft.teams) - 1 do %>
+                <button
+                  phx-click="move_team_down"
+                  phx-value-team-id={team.id}
+                  class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  title="Move down in pick order"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              <% else %>
+                <div class="w-8 h-8"></div> <!-- Spacer for alignment -->
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Information -->
+      <div class="mt-6 p-4 bg-blue-900/50 border border-blue-600 rounded-lg">
+        <div class="flex items-start space-x-3">
+          <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+          </svg>
+          <div>
+            <h4 class="font-semibold text-blue-400 mb-1">Team Order Information</h4>
+            <p class="text-sm text-blue-200">
+              Team pick order determines the sequence of picks in the draft. Position 1 picks first, position 2 picks second, etc. Changes will be applied immediately and shown to all participants.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+
+
+<script>
+  window.addEventListener("phx:copy-to-clipboard", (e) => {
+    navigator.clipboard.writeText(e.detail.text).then(() => {
+      console.log("Text copied to clipboard successfully");
+    }).catch(err => {
+      console.error("Failed to copy text: ", err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = e.detail.text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    });
+  });
+
+
+
+
+
+  // Drag and drop functionality for team reordering in modal
+  let teamDraggedElement = null;
+  let teamDraggedTeamId = null;
+  let teamDraggedIndex = null;
+
+  function handleTeamDragStart(event) {
+    teamDraggedElement = event.target;
+    teamDraggedTeamId = event.target.dataset.teamId;
+    teamDraggedIndex = parseInt(event.target.dataset.teamIndex);
+
+    event.target.style.opacity = '0.5';
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/html', event.target.outerHTML);
+  }
+
+  function handleTeamDragOver(event) {
+    if (event.preventDefault) {
+      event.preventDefault();
+    }
+
+    const dropTarget = event.target.closest('[draggable="true"]');
+    if (dropTarget && dropTarget !== teamDraggedElement) {
+      dropTarget.classList.add('border-blue-400', 'bg-slate-600');
+    }
+    event.dataTransfer.dropEffect = 'move';
+    return false;
+  }
+
+  function handleTeamDrop(event) {
+    if (event.stopPropagation) {
+      event.stopPropagation();
+    }
+
+    const dropTarget = event.target.closest('[draggable="true"]');
+    if (dropTarget && dropTarget !== teamDraggedElement) {
+      const targetTeamId = dropTarget.dataset.teamId;
+      const targetIndex = parseInt(dropTarget.dataset.teamIndex);
+
+      // Determine if we're moving up or down
+      if (teamDraggedIndex < targetIndex) {
+        // Moving down - place after target
+        dropTarget.parentNode.insertBefore(teamDraggedElement, dropTarget.nextSibling);
+      } else {
+        // Moving up - place before target
+        dropTarget.parentNode.insertBefore(teamDraggedElement, dropTarget);
+      }
+
+      // Create new team order array (filter out non-team elements)
+      const teamElements = Array.from(dropTarget.parentNode.children);
+      const newOrder = teamElements
+        .filter(el => el.dataset.teamId && el.dataset.teamId !== 'undefined')
+        .map(el => el.dataset.teamId);
+
+      // Send reorder event to LiveView
+      window.liveSocket.execJS(teamDraggedElement,
+        `[["push", {"event": "reorder_teams_modal", "value": {"team_order": ${JSON.stringify(newOrder)}}}]]`
+      );
+    }
+
+    // Clean up visual indicators
+    document.querySelectorAll('[draggable="true"]').forEach(el => {
+      el.classList.remove('border-blue-400', 'bg-slate-600');
+    });
+
+    return false;
+  }
+
+  function handleTeamDragEnd(event) {
+    event.target.style.opacity = '';
+    teamDraggedElement = null;
+    teamDraggedTeamId = null;
+    teamDraggedIndex = null;
+
+    // Clean up any remaining visual indicators
+    document.querySelectorAll('[draggable="true"]').forEach(el => {
+      el.classList.remove('border-blue-400', 'bg-slate-600');
+    });
+  }
+</script>

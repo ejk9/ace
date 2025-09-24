@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Popup Screenshot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Enhanced backdrop blur */
+    .backdrop-blur-custom {
+      backdrop-filter: blur(16px);
+    }
+  </style>
+</head>
+<body class="bg-black overflow-hidden">
+  <!-- Full-Screen Champion Splash Art Popup - Tournament Style -->
+  <div id="champion-splash-popup" class="fixed inset-0 w-screen h-screen">
+    <div class="relative w-full h-full">
+      <!-- Full-Screen Champion Splash Art Background -->
+      <div class="absolute inset-0">
+        <div id="champion-image-container">
+          <!-- Champion image will be inserted here -->
+        </div>
+        
+        <!-- Dark overlay for text readability - matching draft overlay -->
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/30 to-transparent"></div>
+        
+        <!-- Floating Champion Info - Top Right -->
+        <div id="champion-info" class="absolute top-4 right-4 bg-black/40 backdrop-blur-custom rounded-lg px-3 py-2 border border-white/10" style="display: none;">
+          <div class="text-right">
+            <h3 id="champion-name" class="text-sm font-medium text-white"></h3>
+            <p id="champion-title" class="text-xs text-slate-400 italic"></p>
+            <p id="skin-name" class="text-amber-300 text-xs font-medium mt-1"></p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Player Info (Hero Section) - Bottom Third like Draft Overlay -->
+      <div class="absolute inset-x-0 bottom-0 flex items-end justify-center pb-16">
+        <div class="text-center relative z-10 max-w-4xl mx-auto px-8">
+          <!-- Glow effect behind player name - matching draft overlay -->
+          <div class="absolute inset-0 bg-gradient-to-t from-yellow-500/5 to-transparent rounded-b-2xl"></div>
+          
+          <div class="relative z-10">
+            <!-- Player Name - EXACT match to draft overlay styling -->
+            <div class="mb-6">
+              <h1 id="player-name" class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 mb-3 drop-shadow-2xl tracking-wide leading-tight">
+                Player Name
+              </h1>
+              
+              <!-- Team Info with enhanced design - matching draft overlay -->
+              <div class="flex items-center justify-center space-x-4 mb-4">
+                <div class="flex items-center space-x-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                  <div id="team-color" class="w-5 h-5 rounded-full shadow-lg ring-2 ring-white/30 bg-blue-500"></div>
+                  <span id="team-name" class="text-lg font-bold text-white">Team Name</span>
+                </div>
+              </div>
+              
+              <!-- Player Role with enhanced badge - matching draft overlay -->
+              <div id="player-role-container" class="inline-flex items-center bg-gradient-to-r from-blue-500/90 to-purple-600/90 backdrop-blur-sm px-6 py-3 rounded-full text-sm font-bold text-white shadow-xl border border-white/20 uppercase tracking-wider space-x-3" style="display: none;">
+                <div id="role-icon"></div>
+                <span id="player-role">ROLE</span>
+              </div>
+            </div>
+            
+            <!-- Pick Context - matching draft overlay style -->
+            <div class="text-center opacity-80">
+              <div class="inline-flex items-center space-x-2 text-slate-300">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                <span id="pick-context" class="text-sm font-medium">
+                  Round 1 • Pick 1
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // This function will be called by the screenshot service to populate the template
+    function populateTemplate(data) {
+      // Player name
+      document.getElementById('player-name').textContent = data.player_name || 'Unknown Player';
+      
+      // Team info
+      document.getElementById('team-name').textContent = data.team_name || 'Unknown Team';
+      const teamColorElement = document.getElementById('team-color');
+      teamColorElement.className = teamColorElement.className.replace(/bg-\w+-\d+/, data.team_color || 'bg-blue-500');
+      
+      // Champion image
+      const imageContainer = document.getElementById('champion-image-container');
+      if (data.champion_image && data.champion_image !== '') {
+        imageContainer.innerHTML = `<img src="${data.champion_image}" alt="Champion Splash Art" class="w-full h-full object-cover object-center"/>`;
+        
+        // Show champion info if available
+        if (data.champion_name) {
+          document.getElementById('champion-info').style.display = 'block';
+          document.getElementById('champion-name').textContent = data.champion_name;
+          document.getElementById('champion-title').textContent = data.champion_title || '';
+          document.getElementById('skin-name').textContent = data.skin_name || '';
+          if (!data.skin_name) {
+            document.getElementById('skin-name').style.display = 'none';
+          }
+        }
+      } else {
+        // Default background when no champion image
+        imageContainer.innerHTML = `
+          <div class="w-full h-full bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 flex items-center justify-center">
+            <div class="text-slate-400 text-4xl font-bold opacity-50">League of Legends</div>
+          </div>
+        `;
+      }
+      
+      // Player role
+      if (data.player_role && data.player_role !== '') {
+        document.getElementById('player-role-container').style.display = 'inline-flex';
+        document.getElementById('player-role').textContent = data.player_role;
+        
+        // Role icon logic
+        const roleIconElement = document.getElementById('role-icon');
+        const role = data.player_role.toLowerCase();
+        let iconHtml = '<div class="w-6 h-6 bg-white/20 rounded-full"></div>'; // Fallback
+        
+        // Note: In a real implementation, you'd want to serve these images locally
+        // For now, using placeholder divs
+        switch (role) {
+          case 'top':
+          case 'jungle':
+          case 'mid':
+          case 'adc':
+          case 'support':
+            iconHtml = `<div class="w-6 h-6 bg-white/30 rounded-full flex items-center justify-center text-xs font-bold">${role.charAt(0).toUpperCase()}</div>`;
+            break;
+        }
+        roleIconElement.innerHTML = iconHtml;
+      }
+      
+      // Pick context
+      const pickContext = `Round ${data.round_number || 1} • Pick ${data.pick_number || 1}`;
+      document.getElementById('pick-context').textContent = pickContext;
+    }
+
+    // Auto-populate if data is provided via URL parameters (for testing)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('player_name')) {
+      const data = {};
+      for (const [key, value] of urlParams.entries()) {
+        data[key] = value;
+      }
+      populateTemplate(data);
+    }
+  </script>
+</body>
+</html>

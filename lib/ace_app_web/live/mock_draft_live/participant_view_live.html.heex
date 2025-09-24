@@ -1,0 +1,146 @@
+<Layouts.app flash={@flash} current_scope={%{}}>
+  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div class="max-w-6xl mx-auto p-6">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg mb-4">
+          <svg class="h-8 w-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 12a1 1 0 102 0V8.5c0-.3.2-.5.5-.5s.5.2.5.5c0 .8.7 1.5 1.5 1.5s1.5-.7 1.5-1.5c0-1.4-1.1-2.5-2.5-2.5S10 6.6 10 8v4z"/>
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-800">{@participant.display_name}'s Live Predictions</h1>
+        <p class="mt-2 text-lg text-slate-600">Track record for {@draft.name}</p>
+      </div>
+
+      <!-- Participant Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 text-center">
+          <div class="text-3xl font-bold text-green-600">{@participant.total_score}</div>
+          <div class="text-sm font-medium text-slate-600 mt-1">Total Score</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 text-center">
+          <div class="text-3xl font-bold text-blue-600">{@participant.predictions_made}</div>
+          <div class="text-sm font-medium text-slate-600 mt-1">Predictions Made</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 text-center">
+          <div class="text-3xl font-bold text-purple-600">
+            <%= if @participant.predictions_made > 0 do %>
+              {Float.round(@participant.accuracy_percentage, 1)}%
+            <% else %>
+              -%
+            <% end %>
+          </div>
+          <div class="text-sm font-medium text-slate-600 mt-1">Accuracy Rate</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 text-center">
+          <div class="text-3xl font-bold text-amber-600">
+            {Calendar.strftime(@participant.joined_at, "%m/%d")}
+          </div>
+          <div class="text-sm font-medium text-slate-600 mt-1">Joined</div>
+        </div>
+      </div>
+
+      <!-- Predictions Timeline -->
+      <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+        <div class="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-green-200">
+          <h2 class="text-xl font-semibold text-green-900">Prediction Timeline</h2>
+          <p class="text-sm text-green-700 mt-1">All predictions made during the live draft</p>
+        </div>
+        
+        <%= if @predictions == [] do %>
+          <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <h3 class="mt-4 text-lg font-medium text-slate-900">No predictions yet</h3>
+            <p class="mt-2 text-slate-500">This participant hasn't made any live predictions</p>
+          </div>
+        <% else %>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+              <thead class="bg-slate-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Pick #</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Predicted Player</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Predicted At</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Result</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Points</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-slate-200">
+                <%= for prediction <- @predictions do %>
+                  <% predicted_player = get_player_by_id(@players, prediction.predicted_player_id) %>
+                  <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="flex items-center">
+                        <div class="text-sm font-medium text-slate-900">#{prediction.pick_number}</div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <%= if predicted_player do %>
+                        <div class="flex items-center">
+                          <div>
+                            <div class="text-sm font-medium text-slate-900">{predicted_player.display_name}</div>
+                            <div class="text-sm text-slate-500">
+                              {Enum.join(predicted_player.preferred_roles || [], ", ")}
+                            </div>
+                          </div>
+                        </div>
+                      <% else %>
+                        <div class="text-sm text-slate-500 italic">Player not found</div>
+                      <% end %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-slate-600">
+                        {Calendar.strftime(prediction.predicted_at, "%m/%d %I:%M %p")}
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <%= if prediction.is_locked do %>
+                        <%= if prediction.points_awarded > 0 do %>
+                          <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                            ✓ Correct
+                          </span>
+                        <% else %>
+                          <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                            ✗ Incorrect
+                          </span>
+                        <% end %>
+                      <% else %>
+                        <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                          ⏳ Pending
+                        </span>
+                      <% end %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class={[
+                        "text-sm font-semibold",
+                        if(prediction.points_awarded > 0, do: "text-green-600", else: "text-slate-400")
+                      ]}>
+                        +{prediction.points_awarded}
+                      </div>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Back to Leaderboard -->
+      <div class="mt-8 text-center">
+        <.link
+          navigate={"/mock-drafts/#{@mock_draft.mock_draft_token}/leaderboard"}
+          class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-semibold rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]"
+        >
+          <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+          </svg>
+          Back to Leaderboard
+        </.link>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

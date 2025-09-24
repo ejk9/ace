@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Rosters Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scroll styling */
+        .scroll-container {
+            scrollbar-width: thin;
+            scrollbar-color: #475569 #1e293b;
+        }
+        .scroll-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Team animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        .team-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .slide-in {
+            animation: slideIn 0.6s ease-out;
+        }
+
+        /* Team color gradients */
+        .team-blue { background: linear-gradient(135deg, #334155, #1e3a8a); border-color: #3b82f6; }
+        .team-red { background: linear-gradient(135deg, #334155, #991b1b); border-color: #ef4444; }
+        .team-green { background: linear-gradient(135deg, #334155, #065f46); border-color: #10b981; }
+        .team-purple { background: linear-gradient(135deg, #334155, #581c87); border-color: #8b5cf6; }
+        .team-orange { background: linear-gradient(135deg, #334155, #9a3412); border-color: #f97316; }
+        .team-pink { background: linear-gradient(135deg, #334155, #be185d); border-color: #ec4899; }
+        .team-indigo { background: linear-gradient(135deg, #334155, #3730a3); border-color: #6366f1; }
+        .team-cyan { background: linear-gradient(135deg, #334155, #0e7490); border-color: #06b6d4; }
+        .team-amber { background: linear-gradient(135deg, #334155, #92400e); border-color: #f59e0b; }
+        .team-emerald { background: linear-gradient(135deg, #334155, #047857); border-color: #10b981; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 m-0 p-0 overflow-hidden">
+    <!-- Loading State -->
+    <div id="loading" class="flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-yellow-400 mb-4">Loading Rosters...</div>
+            <div class="text-slate-400">Connecting to draft...</div>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="hidden flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-red-400 mb-4">Connection Error</div>
+            <div class="text-slate-400">Unable to load roster data</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="content" class="hidden h-screen bg-slate-900 text-slate-100 flex flex-col">
+        <!-- Header -->
+        <div class="bg-slate-800 border-b border-slate-700 px-2 py-1">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <h1 id="draftTitle" class="text-sm font-bold text-yellow-400">Draft Name</h1>
+                    <div class="px-1 py-0.5 rounded text-xs font-medium bg-slate-600 text-slate-200">
+                        Team Rosters
+                    </div>
+                </div>
+                
+                <div class="text-right">
+                    <div id="draftStatus" class="text-xs font-semibold text-yellow-400">SETUP</div>
+                    <div id="progressInfo" class="text-xs text-slate-400">0 of 10 picks</div>
+                </div>
+            </div>
+            
+            <div class="text-slate-400 text-xs">
+                <span id="draftSubtitle">Draft Room • snake • Team Overview</span>
+            </div>
+        </div>
+        
+        <!-- Rosters Grid -->
+        <div class="flex-1 p-1" style="height: calc(100vh - 60px);">
+            <div id="teamRosters" class="grid gap-1 w-full" style="height: 100%;">
+                <!-- Team roster cards will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const urlParams = new URLSearchParams(window.location.search);
+        const DRAFT_ID = urlParams.get('draft_id');
+        
+        if (!DRAFT_ID) {
+            document.getElementById('loading').innerHTML = `
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-red-400 mb-4">Missing Draft ID</div>
+                    <div class="text-slate-400">Please add ?draft_id=YOUR_DRAFT_ID to the URL</div>
+                </div>
+            `;
+            throw new Error('No draft ID provided');
+        }
+
+        const API_BASE = window.location.origin;
+        const REFRESH_INTERVAL = 3000; // 3 seconds for roster (less frequent updates needed)
+
+        let refreshInterval;
+        let lastDataTimestamp = null;
+        let lastTeamsState = null;
+
+        // Image caching to prevent glitching
+        const imageCache = new Map();
+        const imageLoadPromises = new Map();
+
+        // Team color mapping
+        const TEAM_COLORS = {
+            'blue': '#3b82f6', 'red': '#ef4444', 'green': '#10b981', 'purple': '#8b5cf6',
+            'orange': '#f97316', 'pink': '#ec4899', 'indigo': '#6366f1', 'cyan': '#06b6d4',
+            'amber': '#f59e0b', 'emerald': '#10b981'
+        };
+
+        // Role icon mapping (League of Legends roles)
+        const ROLE_ICONS = {
+            'top': '/images/roles/roleicon_top.png',
+            'jungle': '/images/roles/roleicon_jungle.png', 
+            'mid': '/images/roles/roleicon_middle.png',
+            'middle': '/images/roles/roleicon_middle.png',
+            'adc': '/images/roles/roleicon_bottom.png',
+            'bot': '/images/roles/roleicon_bottom.png',
+            'bottom': '/images/roles/roleicon_bottom.png',
+            'support': '/images/roles/roleicon_utility.png',
+            'utility': '/images/roles/roleicon_utility.png',
+            'supp': '/images/roles/roleicon_utility.png'
+        };
+
+        // Image loading utilities
+        function preloadImage(url) {
+            if (!url) return Promise.resolve(false);
+            if (imageCache.has(url)) return Promise.resolve(imageCache.get(url));
+            if (imageLoadPromises.has(url)) return imageLoadPromises.get(url);
+
+            const promise = new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    imageCache.set(url, true);
+                    imageLoadPromises.delete(url);
+                    resolve(true);
+                };
+                img.onerror = () => {
+                    imageCache.set(url, false);
+                    imageLoadPromises.delete(url);
+                    resolve(false);
+                };
+                img.src = url;
+            });
+
+            imageLoadPromises.set(url, promise);
+            return promise;
+        }
+
+        function createTeamLogo(team, size = 'w-12 h-12') {
+            const logoId = `logo-${team.id}`;
+            const cachedResult = imageCache.get(team.logo_url);
+            
+            if (team.logo_url && cachedResult === true) {
+                return `<img id="${logoId}" src="${team.logo_url}" class="${size} rounded-full object-cover border-2 border-slate-500" alt="${team.name} logo">`;
+            } else {
+                // Show fallback immediately
+                const fallback = `<div id="${logoId}" class="${size} rounded-full bg-gradient-to-br from-${team.color}-500 to-${team.color}-600 flex items-center justify-center text-white font-bold">${team.pick_order_position}</div>`;
+                
+                // Preload image if URL exists
+                if (team.logo_url && cachedResult === undefined) {
+                    preloadImage(team.logo_url).then(success => {
+                        if (success) {
+                            const logoElement = document.getElementById(logoId);
+                            if (logoElement) {
+                                logoElement.outerHTML = `<img id="${logoId}" src="${team.logo_url}" class="${size} rounded-full object-cover border-2 border-slate-500" alt="${team.name} logo">`;
+                            }
+                        }
+                    });
+                }
+                
+                return fallback;
+            }
+        }
+
+        function getRoleIcon(roles) {
+            if (!roles || !Array.isArray(roles) || roles.length === 0) {
+                return null;
+            }
+            
+            // Get the first role that we have an icon for
+            for (const role of roles) {
+                const normalizedRole = role.toLowerCase().trim();
+                if (ROLE_ICONS[normalizedRole]) {
+                    return ROLE_ICONS[normalizedRole];
+                }
+            }
+            
+            return null;
+        }
+
+        function createPlayerDisplay(player, pickNumber) {
+            if (!player) {
+                return '<div class="text-sm text-slate-400 italic">No player assigned</div>';
+            }
+            
+            const roleIcon = getRoleIcon(player.preferred_roles);
+            const roleIconHtml = roleIcon ? 
+                `<img src="${roleIcon}" class="w-4 h-4 opacity-80" alt="Role" />` : 
+                '<div class="w-4 h-4 bg-slate-500 rounded-sm opacity-60"></div>';
+            
+            return `
+                <div class="flex items-center space-x-2">
+                    ${roleIconHtml}
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-slate-200 truncate">${player.display_name || 'Unknown Player'}</div>
+                    </div>
+                    <div class="text-xs text-slate-400">P${pickNumber}</div>
+                </div>
+            `;
+        }
+
+        // Role priority order for sorting
+        const ROLE_PRIORITY = {
+            'top': 1,
+            'jungle': 2,
+            'mid': 3, 'middle': 3,
+            'adc': 4, 'bot': 4, 'bottom': 4,
+            'support': 5, 'utility': 5, 'supp': 5
+        };
+
+        function getRolePriority(player) {
+            if (!player || !player.preferred_roles || player.preferred_roles.length === 0) {
+                return 999; // Put players without roles at the end
+            }
+            
+            // Find the highest priority role (lowest number)
+            let priority = 999;
+            for (const role of player.preferred_roles) {
+                const normalizedRole = role.toLowerCase().trim();
+                if (ROLE_PRIORITY[normalizedRole] && ROLE_PRIORITY[normalizedRole] < priority) {
+                    priority = ROLE_PRIORITY[normalizedRole];
+                }
+            }
+            return priority;
+        }
+
+        function sortRosterByRole(roster) {
+            return [...roster].sort((a, b) => {
+                const priorityA = getRolePriority(a.player);
+                const priorityB = getRolePriority(b.player);
+                
+                // Sort by role priority first, then by pick number as secondary
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
+                }
+                return a.pick_number - b.pick_number;
+            });
+        }
+
+        function getMissingRoles(roster) {
+            // All standard League roles
+            const allRoles = ['top', 'jungle', 'mid', 'adc', 'support'];
+            const coveredRoles = new Set();
+            
+            // Check which roles are covered by current roster
+            roster.forEach(pick => {
+                if (pick.player && pick.player.preferred_roles) {
+                    pick.player.preferred_roles.forEach(role => {
+                        const normalizedRole = role.toLowerCase().trim();
+                        // Map role variants to standard names
+                        if (normalizedRole === 'top') coveredRoles.add('top');
+                        if (normalizedRole === 'jungle') coveredRoles.add('jungle');
+                        if (normalizedRole === 'mid' || normalizedRole === 'middle') coveredRoles.add('mid');
+                        if (normalizedRole === 'adc' || normalizedRole === 'bot' || normalizedRole === 'bottom') coveredRoles.add('adc');
+                        if (normalizedRole === 'support' || normalizedRole === 'utility' || normalizedRole === 'supp') coveredRoles.add('support');
+                    });
+                }
+            });
+            
+            // Return roles that are not covered
+            return allRoles.filter(role => !coveredRoles.has(role));
+        }
+
+        function createMissingRolesDisplay(missingRoles) {
+            if (missingRoles.length === 0) {
+                return '<div class="text-xs text-green-400 font-medium">✓ All roles covered</div>';
+            }
+            
+            const missingIcons = missingRoles.map(role => {
+                const iconUrl = ROLE_ICONS[role];
+                return iconUrl ? 
+                    `<img src="${iconUrl}" class="w-3 h-3 opacity-60" alt="${role}" title="Missing ${role}" />` :
+                    `<div class="w-3 h-3 bg-slate-500 rounded-sm opacity-40" title="Missing ${role}"></div>`;
+            }).join('');
+            
+            return `
+                <div class="flex items-center space-x-1">
+                    <span class="text-xs text-orange-400">Missing:</span>
+                    <div class="flex space-x-1">${missingIcons}</div>
+                </div>
+            `;
+        }
+
+        function deepEqual(obj1, obj2) {
+            return JSON.stringify(obj1) === JSON.stringify(obj2);
+        }
+
+        async function fetchRosterData() {
+            try {
+                const response = await fetch(`${API_BASE}/stream/${DRAFT_ID}/roster.json`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Only update if data changed
+                if (data.timestamp !== lastDataTimestamp) {
+                    updateDisplay(data);
+                    lastDataTimestamp = data.timestamp;
+                }
+                hideError();
+            } catch (error) {
+                console.error('Failed to fetch roster data:', error);
+                showError();
+            }
+        }
+
+        function updateDisplay(data) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+            
+            // Update header
+            updateHeader(data);
+            
+            // Only update rosters if teams data changed
+            if (!deepEqual(data.teams, lastTeamsState)) {
+                updateRosters(data.teams);
+                lastTeamsState = data.teams;
+            }
+        }
+
+        function updateHeader(data) {
+            document.getElementById('draftTitle').textContent = data.draft.name;
+            document.getElementById('draftSubtitle').textContent = 
+                `Draft Room • ${data.draft.format} • Team Overview`;
+            
+            const statusElement = document.getElementById('draftStatus');
+            const status = data.draft.status.toUpperCase();
+            statusElement.textContent = status;
+            
+            // Color code status
+            statusElement.className = `text-lg font-semibold ${
+                status === 'ACTIVE' ? 'text-green-400' :
+                status === 'PAUSED' ? 'text-orange-400' :
+                status === 'COMPLETED' ? 'text-purple-400' :
+                'text-yellow-400'
+            }`;
+            
+            document.getElementById('progressInfo').textContent = 
+                `${data.draft.total_picks_made} of ${data.draft.total_picks_possible} picks made`;
+        }
+
+        function updateRosters(teams) {
+            const container = document.getElementById('teamRosters');
+            
+            // Optimize grid layout to use full screen space
+            let gridClass = 'grid-cols-1';
+            let rowsClass = '';
+            
+            if (teams.length <= 2) {
+                gridClass = 'grid-cols-2';
+                rowsClass = 'grid-rows-1';
+            } else if (teams.length <= 4) {
+                gridClass = 'grid-cols-4';
+                rowsClass = 'grid-rows-1';
+            } else if (teams.length <= 6) {
+                gridClass = 'grid-cols-3';
+                rowsClass = 'grid-rows-2';
+            } else if (teams.length <= 8) {
+                gridClass = 'grid-cols-4';
+                rowsClass = 'grid-rows-2';
+            } else if (teams.length <= 10) {
+                gridClass = 'grid-cols-5';
+                rowsClass = 'grid-rows-2';
+            } else if (teams.length <= 12) {
+                gridClass = 'grid-cols-6';
+                rowsClass = 'grid-rows-2';
+            } else {
+                gridClass = 'grid-cols-6';
+                rowsClass = 'auto-rows-fr';
+            }
+            
+            // Ensure grid fills full available height
+            container.className = `grid gap-1 w-full ${gridClass} ${rowsClass}`;
+            container.style.height = '100%';
+            
+            const rostersHTML = teams
+                .sort((a, b) => a.pick_order_position - b.pick_order_position)
+                .map((team, index) => {
+                    return `
+                        <div class="team-${team.color} rounded-lg p-2 border-2 transition-all slide-in flex flex-col h-full w-full" style="animation-delay: ${index * 0.1}s">
+                            <!-- Team Header -->
+                            <div class="flex items-center space-x-2 mb-2">
+                                ${createTeamLogo(team, 'w-7 h-7')}
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-bold text-slate-100 truncate">${team.name}</div>
+                                    <div class="text-xs text-slate-400">Pick ${team.pick_order_position}</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm font-bold text-yellow-400">${team.roster_count}/5</div>
+                                </div>
+                            </div>
+                            
+
+                            
+                            <!-- Roster List -->
+                            <div class="flex-1 flex flex-col min-h-0">
+                                <div class="space-y-1.5 flex-1">
+                                    ${team.roster.length > 0 ? 
+                                        sortRosterByRole(team.roster).map((pick, i) => `
+                                            <div class="bg-slate-800/50 rounded p-1.5 border border-slate-600">
+                                                ${createPlayerDisplay(pick.player, pick.pick_number)}
+                                            </div>
+                                        `).join('') :
+                                        '<div class="text-center text-slate-400 py-2 text-sm">No picks yet</div>'
+                                    }
+                                    
+                                    <!-- Remaining Slots -->
+                                    ${Array(5 - team.roster_count).fill(0).map((_, i) => `
+                                        <div class="bg-slate-700/30 rounded p-1.5 border border-slate-600 border-dashed">
+                                            <div class="text-center text-slate-500">
+                                                <div class="text-sm">Pick ${team.roster_count + i + 1}</div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            
+                            <!-- Missing Roles Section -->
+                            <div class="mt-2 pt-2 border-t border-slate-600">
+                                ${createMissingRolesDisplay(getMissingRoles(team.roster))}
+                            </div>
+
+                        </div>
+                    `;
+                }).join('');
+            
+            container.innerHTML = rostersHTML;
+        }
+
+        function showError() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Initialize
+        function init() {
+            fetchRosterData();
+            refreshInterval = setInterval(fetchRosterData, REFRESH_INTERVAL);
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

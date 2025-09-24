@@ -1,0 +1,325 @@
+<Layouts.app flash={@flash}>
+  <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <!-- Header -->
+    <div class="bg-slate-800/50 border-b border-slate-700 px-6 py-4">
+      <div class="max-w-7xl mx-auto">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white">Mock Draft Prediction</h1>
+            <p class="text-slate-300 mt-1"><%= @draft.name %></p>
+          </div>
+          
+          <div class="text-right">
+            <%= if @mock_draft.submission_deadline do %>
+              <div class="text-sm text-slate-400">Deadline:</div>
+              <div class={[
+                "text-sm font-medium",
+                if(@deadline_passed?, do: "text-red-400", else: "text-emerald-400")
+              ]}>
+                <%= format_deadline(@mock_draft.submission_deadline) %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-6 py-8">
+      <%= if @deadline_passed? do %>
+        <!-- Deadline Passed Message -->
+        <div class="bg-red-900/20 border border-red-500/50 rounded-xl p-6 mb-8">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+              <.icon name="hero-clock" class="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-red-400">Submission Deadline Passed</h3>
+              <p class="text-red-300">The deadline for draft predictions has passed. You can no longer submit or modify predictions.</p>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <%= if is_nil(@submission) do %>
+        <!-- Join Form -->
+        <div class="bg-slate-800/50 rounded-xl border border-slate-700 p-8 mb-8">
+          <h2 class="text-xl font-semibold text-white mb-4">Join Mock Draft</h2>
+          <p class="text-slate-300 mb-6">
+            Predict the complete draft before it begins! Build your ideal draft for all teams and see how accurate your predictions are.
+          </p>
+          
+          <form phx-submit="join_predraft" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">Your Name</label>
+              <input 
+                type="text" 
+                name="participant_name" 
+                value={@participant_name}
+                placeholder="Enter your display name..."
+                class="w-full max-w-md px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={@deadline_passed?}
+              />
+            </div>
+            
+            <button 
+              type="submit" 
+              class={[
+                "px-6 py-3 font-medium rounded-lg transition-all",
+                if(@deadline_passed?, 
+                  do: "bg-slate-600 text-slate-400 cursor-not-allowed", 
+                  else: "bg-blue-600 hover:bg-blue-700 text-white"
+                )
+              ]}
+              disabled={@deadline_passed?}
+            >
+              <%= if @deadline_passed?, do: "Deadline Passed", else: "Join Mock Draft" %>
+            </button>
+          </form>
+        </div>
+      <% else %>
+        <!-- Draft Builder Interface -->
+        <div class="space-y-8">
+          <!-- Progress Header -->
+          <div class="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-xl font-semibold text-white">Building Draft for <%= @participant_name %></h2>
+                <p class="text-slate-300">Drag players to team slots or click to assign picks</p>
+              </div>
+              
+              <div class="text-right">
+                <div class="text-2xl font-bold text-blue-400">
+                  <%= map_size(@predicted_picks) %>/<%= length(@teams) * 5 %>
+                </div>
+                <div class="text-sm text-slate-400">Picks Complete</div>
+              </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-700 rounded-full h-2">
+              <div 
+                class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                style={"width: #{(map_size(@predicted_picks) / (length(@teams) * 5)) * 100}%"}
+              >
+              </div>
+            </div>
+          </div>
+
+          <!-- Draft Board -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <%= for {team, team_index} <- Enum.with_index(@teams) do %>
+              <div class="bg-slate-800/50 rounded-xl border border-slate-700 p-6 min-w-0 overflow-hidden">
+                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-3">
+                  <!-- Team Logo or Fallback -->
+                  <div class="relative">
+                    <%= if team.logo_url do %>
+                      <img 
+                        src={team.logo_url} 
+                        alt="{team.name} logo"
+                        class="w-8 h-8 rounded object-cover shadow-sm border border-slate-600"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                      />
+                    <% end %>
+                    <!-- Fallback Logo with Team Color -->
+                    <div class={[
+                      "w-8 h-8 rounded flex items-center justify-center text-white font-bold text-sm shadow-sm",
+                      if(team.logo_url, do: "hidden", else: "flex"),
+                      case team.pick_order_position do
+                        1 -> "bg-gradient-to-br from-blue-500 to-blue-600"
+                        2 -> "bg-gradient-to-br from-red-500 to-red-600"
+                        3 -> "bg-gradient-to-br from-green-500 to-green-600"
+                        4 -> "bg-gradient-to-br from-purple-500 to-purple-600"
+                        5 -> "bg-gradient-to-br from-orange-500 to-orange-600"
+                        6 -> "bg-gradient-to-br from-pink-500 to-pink-600"
+                        7 -> "bg-gradient-to-br from-indigo-500 to-indigo-600"
+                        8 -> "bg-gradient-to-br from-cyan-500 to-cyan-600"
+                        9 -> "bg-gradient-to-br from-amber-500 to-amber-600"
+                        10 -> "bg-gradient-to-br from-emerald-500 to-emerald-600"
+                        _ -> "bg-gradient-to-br from-gray-500 to-gray-600"
+                      end
+                    ]}>
+                      {team.pick_order_position}
+                    </div>
+                  </div>
+                  <%= team.name %>
+                </h3>
+                
+                <!-- Team Roster Slots (5 picks) -->
+                <div class="space-y-3">
+                  <%= for round <- 1..5 do %>
+                    <% pick_number = get_pick_for_team_and_round(team_index, round) %>
+                    <% predicted_pick = Map.get(@predicted_picks, pick_number) %>
+                    
+                    <div class="relative">
+                      <button 
+                        phx-click="select_pick_slot"
+                        phx-value-pick-number={pick_number}
+                        disabled={@submission && @submission.is_submitted}
+                        class={[
+                          "w-full block p-3 rounded-lg border transition-all text-left",
+                          if(predicted_pick, do: "bg-slate-700/50 border-slate-600", else: "bg-slate-700/30 border-slate-600 border-dashed hover:bg-slate-700/40 hover:border-slate-500"),
+                          if(@selected_pick_number == pick_number, do: "ring-2 ring-blue-500 border-blue-500", else: ""),
+                          if(not (@submission && @submission.is_submitted), do: "cursor-pointer", else: "cursor-default")
+                        ]}
+                      >
+                        <div class="flex items-center gap-3">
+                          <div class="text-sm font-medium text-slate-400 w-8 flex-shrink-0">
+                            #<%= pick_number %>
+                          </div>
+                          
+                          <div class="flex-1 min-w-0">
+                            <%= if predicted_pick do %>
+                              <% player = Enum.find(@players, &(&1.id == predicted_pick.player_id)) %>
+                              <div class="pr-8">
+                                <div class="text-white font-medium truncate"><%= player.display_name %></div>
+                                <div class="text-sm text-slate-400 truncate">
+                                  <%= Enum.join(player.preferred_roles || [], ", ") %>
+                                </div>
+                              </div>
+                            <% else %>
+                              <div class="text-slate-500 italic truncate">Click to select player...</div>
+                            <% end %>
+                          </div>
+                        </div>
+                      </button>
+                      
+                      <%= if predicted_pick do %>
+                        <button 
+                          phx-click="remove_prediction" 
+                          phx-value-pick-number={pick_number}
+                          class="absolute top-2 right-2 text-red-400 hover:text-red-300 p-1 hover:bg-red-900/20 rounded"
+                          disabled={@submission && @submission.is_submitted}
+                          onclick="event.stopPropagation()"
+                        >
+                          <.icon name="hero-x-mark" class="w-4 h-4" />
+                        </button>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+
+          <!-- Player Pool -->
+          <div class="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+            <h3 class="text-lg font-semibold text-white mb-4">Available Players</h3>
+            
+            <!-- Search Input -->
+            <div class="mb-6">
+              <input 
+                type="text" 
+                placeholder="Search players..."
+                class="w-full max-w-md px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            
+            <!-- Selection Instructions -->
+            <%= if @selected_pick_number do %>
+              <div class="mb-4 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
+                <div class="text-blue-200 font-medium">
+                  Select a player for Pick #<%= @selected_pick_number %>
+                </div>
+                <div class="text-blue-300 text-sm mt-1">
+                  Click on a player below to assign them to this pick
+                </div>
+                <button 
+                  phx-click="cancel_selection"
+                  class="text-blue-400 hover:text-blue-300 text-sm underline mt-2"
+                >
+                  Cancel selection
+                </button>
+              </div>
+            <% end %>
+
+            <!-- Player Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              <%= for player <- @players do %>
+                <% already_picked = Enum.any?(Map.values(@predicted_picks), fn pick -> pick.player_id == player.id end) %>
+                <button 
+                  phx-click="select_player"
+                  phx-value-player-id={player.id}
+                  disabled={(@submission && @submission.is_submitted) or already_picked or is_nil(@selected_pick_number)}
+                  class={[
+                    "bg-slate-700/50 rounded-lg p-3 border transition-all text-left",
+                    if(already_picked, do: "border-slate-500 opacity-50 cursor-not-allowed", else: "border-slate-600 hover:bg-slate-700 cursor-pointer"),
+                    if(not is_nil(@selected_pick_number) and not already_picked, do: "hover:border-blue-500 hover:bg-blue-900/20", else: ""),
+                    if(is_nil(@selected_pick_number) and not already_picked, do: "opacity-75", else: "")
+                  ]}
+                >
+                  <div class={[
+                    "font-medium text-sm transition-colors",
+                    if(already_picked, do: "text-slate-500", else: "text-white group-hover:text-blue-400")
+                  ]}>
+                    <%= player.display_name %>
+                    <%= if already_picked do %>
+                      <span class="text-xs text-slate-500 ml-1">(picked)</span>
+                    <% end %>
+                  </div>
+                  
+                  <%= if player.preferred_roles && length(player.preferred_roles) > 0 do %>
+                    <div class="text-xs text-slate-400 mt-1">
+                      <%= Enum.take(player.preferred_roles, 2) |> Enum.join(", ") %>
+                    </div>
+                  <% end %>
+                  
+                  <!-- Player accounts info -->
+                  <%= if player.player_accounts && length(player.player_accounts) > 0 do %>
+                    <% primary_account = Enum.find(player.player_accounts, & &1.is_primary) || hd(player.player_accounts) %>
+                    <div class="text-xs text-slate-500 mt-1">
+                      <%= primary_account.rank_tier || "Unranked" %>
+                    </div>
+                  <% end %>
+                </button>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- Submission Controls -->
+          <%= if @submission && not @submission.is_submitted do %>
+            <div class="flex justify-center gap-4">
+              <button 
+                phx-click="save_progress"
+                class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors"
+              >
+                Save Progress
+              </button>
+              
+              <button 
+                phx-click="submit_complete_draft"
+                class={[
+                  "px-8 py-3 font-medium rounded-lg transition-all",
+                  if(map_size(@predicted_picks) >= length(@teams) * 5,
+                    do: "bg-green-600 hover:bg-green-700 text-white",
+                    else: "bg-slate-600 text-slate-400 cursor-not-allowed"
+                  )
+                ]}
+                disabled={map_size(@predicted_picks) < length(@teams) * 5}
+              >
+                Submit Complete Draft
+              </button>
+            </div>
+          <% end %>
+
+          <%= if @submission && @submission.is_submitted do %>
+            <div class="bg-green-900/20 border border-green-500/50 rounded-xl p-6 text-center">
+              <div class="text-green-400 text-lg font-semibold mb-2">Draft Submitted Successfully!</div>
+              <p class="text-green-300">
+                Your complete draft prediction has been submitted. Watch the real draft to see how accurate your predictions are!
+              </p>
+              
+              <div class="mt-4">
+                <a 
+                  href={"/mock-drafts/#{@mock_draft.mock_draft_token}/leaderboard"}
+                  class="inline-block px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  View Leaderboard
+                </a>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</Layouts.app>

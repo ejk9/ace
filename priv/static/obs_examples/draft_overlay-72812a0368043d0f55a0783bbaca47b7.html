@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Draft Room Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scroll styling */
+        .scroll-container {
+            scrollbar-width: thin;
+            scrollbar-color: #475569 #1e293b;
+        }
+        .scroll-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Timer animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .timer-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        /* Responsive design utilities */
+        .responsive-container {
+            min-height: 0;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Ensure text truncates properly on very small screens */
+        @media (max-width: 640px) {
+            .team-name-mobile {
+                max-width: 60px;
+            }
+        }
+
+        /* Team color gradients */
+        .team-blue { background: linear-gradient(135deg, #334155, #1e3a8a); border-color: #3b82f6; }
+        .team-red { background: linear-gradient(135deg, #334155, #991b1b); border-color: #ef4444; }
+        .team-green { background: linear-gradient(135deg, #334155, #065f46); border-color: #10b981; }
+        .team-purple { background: linear-gradient(135deg, #334155, #581c87); border-color: #8b5cf6; }
+        .team-orange { background: linear-gradient(135deg, #334155, #9a3412); border-color: #f97316; }
+        .team-pink { background: linear-gradient(135deg, #334155, #be185d); border-color: #ec4899; }
+        .team-indigo { background: linear-gradient(135deg, #334155, #3730a3); border-color: #6366f1; }
+        .team-cyan { background: linear-gradient(135deg, #334155, #0e7490); border-color: #06b6d4; }
+        .team-amber { background: linear-gradient(135deg, #334155, #92400e); border-color: #f59e0b; }
+        .team-emerald { background: linear-gradient(135deg, #334155, #047857); border-color: #10b981; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 m-0 p-0 overflow-hidden">
+    <!-- Loading State -->
+    <div id="loading" class="flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-yellow-400 mb-4">Loading Draft...</div>
+            <div class="text-slate-400">Connecting to draft room...</div>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="hidden flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-red-400 mb-4">Connection Error</div>
+            <div class="text-slate-400">Unable to load draft data</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="content" class="hidden flex h-screen bg-slate-900 text-slate-100">
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <!-- Draft Room Header - Responsive -->
+            <div class="bg-slate-800 border-b border-slate-700 px-3 sm:px-6 py-2 sm:py-3 flex-shrink-0">
+                <!-- Title Section -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                        <h1 id="draftTitle" class="text-lg sm:text-xl lg:text-2xl font-bold text-yellow-400 truncate">Draft Name</h1>
+                        <div class="px-2 py-1 rounded-full text-xs font-medium bg-slate-600 text-slate-200 hidden sm:block">
+                            Stream View
+                        </div>
+                    </div>
+                    
+                    <!-- Timer & Status Info - Responsive -->
+                    <div class="flex items-center space-x-2 sm:space-x-4 shrink-0 min-w-0">
+                        <!-- Current Pick Timer (integrated) -->
+                        <div id="currentPickInfo" class="hidden flex items-center space-x-2 sm:space-x-3 bg-slate-700 px-2 sm:px-3 py-1 sm:py-2 rounded border border-slate-600 min-w-0 max-w-xs">
+                            <div id="currentTeamLogo" class="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-600 border border-slate-500 shrink-0"></div>
+                            <div class="hidden sm:block min-w-0 flex-1">
+                                <div id="currentTeamName" class="text-xs sm:text-sm font-semibold text-yellow-400 truncate">Team Name</div>
+                                <div id="currentPickNumber" class="text-xs text-slate-400 truncate">Pick #1</div>
+                            </div>
+                            <div class="border-l border-slate-600 pl-2 sm:pl-3 shrink-0">
+                                <div id="mainTimerTime" class="text-sm sm:text-lg font-bold text-yellow-400 whitespace-nowrap">0:00</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Status Info -->
+                        <div class="text-right shrink-0">
+                            <div class="text-xs sm:text-sm text-slate-400">
+                                <span id="draftStatus" class="font-medium text-yellow-400 whitespace-nowrap">Draft Status</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Subtitle - Responsive -->
+                <div class="text-slate-400 text-xs sm:text-sm hidden sm:block">
+                    <span id="draftSubtitle">Draft Room • snake • Player Draft</span>
+                </div>
+            </div>
+            
+            <!-- Main Content Area - Draft Grid -->
+            <div class="flex-1 p-1 overflow-hidden">
+                <!-- Draft Grid without "Draft Overview" text -->
+                <div class="h-full flex flex-col">
+                    <!-- Condensed Rounds Grid - Adaptive -->
+                    <div class="flex-1 min-h-0">
+                        <div id="condensedRounds" class="grid grid-rows-5 gap-0.5 h-full">
+                            <!-- Condensed round rows will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Get draft ID and display options from URL query parameters  
+        const urlParams = new URLSearchParams(window.location.search);
+        const DRAFT_ID = urlParams.get('draft_id');
+        const LOGO_ONLY_MODE = urlParams.get('logo_only') === 'true';
+        
+        if (!DRAFT_ID) {
+            document.getElementById('loading').innerHTML = `
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-red-400 mb-4">Missing Draft ID</div>
+                    <div class="text-slate-400">Please add ?draft_id=YOUR_DRAFT_ID to the URL</div>
+                </div>
+            `;
+            throw new Error('No draft ID provided');
+        }
+
+        const API_BASE = window.location.origin;
+        const REFRESH_INTERVAL = 2000; // 2 seconds
+
+        let refreshInterval;
+        let lastDataTimestamp = null;
+        
+        // Cache for preventing re-renders
+        let lastDataState = {
+            teams: null,
+            currentTurn: null,
+            recentPicks: null,
+            timer: null
+        };
+        
+        // Image loading cache to prevent glitching
+        const imageCache = new Map();
+        const imageLoadPromises = new Map();
+
+        // Team color mapping
+        const TEAM_COLORS = {
+            'blue': '#3b82f6',
+            'red': '#ef4444', 
+            'green': '#10b981',
+            'purple': '#8b5cf6',
+            'orange': '#f97316',
+            'pink': '#ec4899',
+            'indigo': '#6366f1',
+            'cyan': '#06b6d4',
+            'amber': '#f59e0b',
+            'emerald': '#10b981'
+        };
+
+        // Role icon mapping (League of Legends roles)
+        const ROLE_ICONS = {
+            'top': '/images/roles/roleicon_top.png',
+            'jungle': '/images/roles/roleicon_jungle.png', 
+            'mid': '/images/roles/roleicon_middle.png',
+            'middle': '/images/roles/roleicon_middle.png',
+            'adc': '/images/roles/roleicon_bottom.png',
+            'bot': '/images/roles/roleicon_bottom.png',
+            'bottom': '/images/roles/roleicon_bottom.png',
+            'support': '/images/roles/roleicon_utility.png',
+            'utility': '/images/roles/roleicon_utility.png',
+            'supp': '/images/roles/roleicon_utility.png'
+        };
+
+        // Image loading utilities
+        function preloadImage(url) {
+            if (!url) return Promise.resolve(false);
+            if (imageCache.has(url)) return Promise.resolve(imageCache.get(url));
+            if (imageLoadPromises.has(url)) return imageLoadPromises.get(url);
+
+            const promise = new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    imageCache.set(url, true);
+                    imageLoadPromises.delete(url);
+                    resolve(true);
+                };
+                img.onerror = () => {
+                    imageCache.set(url, false);
+                    imageLoadPromises.delete(url);
+                    resolve(false);
+                };
+                img.src = url;
+            });
+
+            imageLoadPromises.set(url, promise);
+            return promise;
+        }
+
+        function createTeamLogo(team, size = 'w-10 h-10') {
+            if (!team || !team.id) {
+                return `<div class="${size} rounded-full bg-slate-600 flex items-center justify-center text-white font-bold text-sm">?</div>`;
+            }
+            
+            const logoId = `logo-${team.id}`;
+            const cachedResult = imageCache.get(team.logo_url);
+            
+            if (team.logo_url && cachedResult === true) {
+                return `<img id="${logoId}" src="${team.logo_url}" class="${size} rounded-full object-cover border border-slate-500" alt="${team.name || 'Team'} logo">`;
+            } else {
+                // Show fallback immediately with safe fallbacks for undefined values
+                const teamColor = team.color || 'slate';
+                const teamPosition = team.pick_order_position || '?';
+                const fallback = `<div id="${logoId}" class="${size} rounded-full bg-gradient-to-br from-${teamColor}-500 to-${teamColor}-600 flex items-center justify-center text-white font-bold text-sm">${teamPosition}</div>`;
+                
+                // Preload image if URL exists and not yet cached
+                if (team.logo_url && cachedResult === undefined) {
+                    preloadImage(team.logo_url).then(success => {
+                        if (success) {
+                            const logoElement = document.getElementById(logoId);
+                            if (logoElement) {
+                                logoElement.outerHTML = `<img id="${logoId}" src="${team.logo_url}" class="${size} rounded-full object-cover border border-slate-500" alt="${team.name || 'Team'} logo">`;
+                            }
+                        }
+                    });
+                }
+                
+                return fallback;
+            }
+        }
+
+        function getRoleIcon(roles) {
+            if (!roles || !Array.isArray(roles) || roles.length === 0) {
+                return null;
+            }
+            
+            // Get the first role that we have an icon for
+            for (const role of roles) {
+                const normalizedRole = role.toLowerCase().trim();
+                if (ROLE_ICONS[normalizedRole]) {
+                    return ROLE_ICONS[normalizedRole];
+                }
+            }
+            
+            return null;
+        }
+
+        function createPlayerDisplay(player, isPicked = false) {
+            if (!player || !isPicked) {
+                return '';
+            }
+            
+            const roleIcon = getRoleIcon(player.roles);
+            const roleIconHtml = roleIcon ? 
+                `<img src="${roleIcon}" class="w-5 h-5 opacity-80 mx-auto mb-1" alt="Role" />` : 
+                '<div class="w-5 h-5 bg-slate-500 rounded-sm opacity-60 mx-auto mb-1"></div>';
+            
+            const playerName = player.name || 'Unknown Player';
+            
+            // Dynamic font sizing based on name length
+            let textSizeClass = 'text-sm';
+            if (playerName.length > 15) {
+                textSizeClass = 'text-xs';
+            } else if (playerName.length > 12) {
+                textSizeClass = 'text-xs';
+            }
+            
+            return `
+                <div class="text-center">
+                    ${roleIconHtml}
+                    <div class="${textSizeClass} font-bold text-slate-100 leading-tight px-1" style="word-break: break-word; hyphens: auto;">${playerName}</div>
+                </div>
+            `;
+        }
+
+        function createTeamDisplay(team, size = 'w-10 h-10') {
+            if (LOGO_ONLY_MODE) {
+                return createTeamLogo(team, size);
+            } else {
+                return `
+                    <div class="flex items-center space-x-2">
+                        ${createTeamLogo(team, size)}
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-semibold text-slate-100 truncate">${team.name}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function deepEqual(obj1, obj2) {
+            return JSON.stringify(obj1) === JSON.stringify(obj2);
+        }
+
+        async function fetchDraftData() {
+            try {
+                const response = await fetch(`${API_BASE}/stream/${DRAFT_ID}/overlay.json`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Only update if data has changed
+                if (data.timestamp !== lastDataTimestamp) {
+                    updateOverlay(data);
+                    lastDataTimestamp = data.timestamp;
+                }
+                hideError();
+            } catch (error) {
+                console.error('Failed to fetch draft data:', error);
+                showError();
+            }
+        }
+
+        function updateOverlay(data) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'flex';
+            
+            // Update header info
+            updateHeader(data);
+            
+            // Only update timer if it changed
+            if (!deepEqual(data.timer, lastDataState.timer) || !deepEqual(data.current_turn, lastDataState.currentTurn)) {
+                updateTimer(data.timer, data.current_turn);
+                lastDataState.timer = data.timer;
+                lastDataState.currentTurn = data.current_turn;
+            }
+            
+            // Update draft progress overview
+            updateDraftProgress(data);
+        }
+
+
+
+
+
+        function updateHeader(data) {
+            document.getElementById('draftTitle').textContent = data.draft.name;
+            document.getElementById('draftSubtitle').textContent = 
+                `Draft Room • ${data.draft.format} • Player Draft`;
+            
+            const statusElement = document.getElementById('draftStatus');
+            const status = data.draft.status.toUpperCase();
+            statusElement.textContent = status;
+            
+            // Color code status
+            statusElement.className = `font-medium ${
+                status === 'ACTIVE' ? 'text-green-400' :
+                status === 'PAUSED' ? 'text-orange-400' :
+                status === 'COMPLETED' ? 'text-purple-400' :
+                'text-yellow-400'
+            }`;
+        }
+
+        function updateTimer(timer, currentTurn) {
+            const currentPickInfo = document.getElementById('currentPickInfo');
+            
+            if (timer && timer.active && currentTurn) {
+                // Show current pick info in header
+                currentPickInfo.style.display = 'flex';
+                
+                const remaining = timer.remaining_seconds || 0;
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Update timer
+                document.getElementById('mainTimerTime').textContent = timeStr;
+                
+                // Update current pick info
+                document.getElementById('currentTeamName').textContent = currentTurn.team.name;
+                document.getElementById('currentPickNumber').textContent = 
+                    `Pick #${currentTurn.pick_number}`;
+                
+                // Update team logo if available
+                const logoElement = document.getElementById('currentTeamLogo');
+                if (currentTurn.team && logoElement) {
+                    const expectedLogoHtml = createTeamLogo(currentTurn.team, 'w-full h-full');
+                    if (logoElement.innerHTML !== expectedLogoHtml) {
+                        logoElement.innerHTML = expectedLogoHtml;
+                    }
+                }
+                
+                // Color code timer based on remaining time
+                const timerElement = document.getElementById('mainTimerTime');
+                
+                let colorClass = 'text-yellow-400';
+                let pulseClass = '';
+                
+                if (remaining <= 10) {
+                    colorClass = 'text-red-400';
+                    pulseClass = 'timer-pulse';
+                } else if (remaining <= 30) {
+                    colorClass = 'text-orange-400';
+                }
+                
+                timerElement.className = `text-sm sm:text-lg font-bold ${colorClass} ${pulseClass}`;
+                
+            } else {
+                // Hide timer when not active
+                currentPickInfo.style.display = 'none';
+            }
+        }
+
+        function updateDraftProgress(data) {
+            updateCondensedView(data);
+        }
+
+        function updateCondensedView(data) {
+            const container = document.getElementById('condensedRounds');
+            
+            if (!data.teams || data.teams.length === 0) return;
+            
+            // Sort teams by pick order position to ensure correct draft order
+            const sortedTeams = [...data.teams].sort((a, b) => a.pick_order_position - b.pick_order_position);
+            
+            const teamsCount = sortedTeams.length;
+            const rounds = 5; // Standard 5 rounds
+            const currentPick = data.draft.current_pick_number;
+            
+            // Create a map of pick numbers to pick data for quick lookup
+            const pickMap = {};
+            if (data.all_picks) {
+                data.all_picks.forEach(pick => {
+                    pickMap[pick.pick_number] = pick;
+                });
+            }
+            
+            let roundsHTML = '';
+            
+            // Generate each round as a horizontal row
+            for (let round = 1; round <= rounds; round++) {
+                const roundStartPick = (round - 1) * teamsCount + 1;
+                
+                roundsHTML += `
+                    <div class="bg-slate-800 rounded-lg p-1 border border-slate-700">
+                        <!-- Round Header with Team Names -->
+                        <div class="flex items-center mb-1">
+                            <!-- Round Label -->
+                            <div class="w-8 flex-shrink-0 px-1">
+                                <div class="text-xs font-bold text-slate-300">R${round}</div>
+                            </div>
+                            
+                            <!-- Team Names Grid -->
+                            <div class="flex-1 grid gap-1" style="grid-template-columns: repeat(${teamsCount}, 1fr);">
+                `;
+                
+                // First pass: Generate team name headers
+                // For snake draft, we need to show teams in the order they pick in this round
+                const teamOrderForRound = [];
+                for (let pickInRound = 1; pickInRound <= teamsCount; pickInRound++) {
+                    const pickNumber = roundStartPick + pickInRound - 1;
+                    
+                    // Snake order: odd rounds go 1->n, even rounds go n->1
+                    let teamIndex;
+                    if (round % 2 === 1) {
+                        // Odd rounds: normal order (1, 2, 3, 4, ...)
+                        teamIndex = pickInRound - 1;
+                    } else {
+                        // Even rounds: reverse order (..., 4, 3, 2, 1)
+                        teamIndex = teamsCount - pickInRound;
+                    }
+                    
+                    teamOrderForRound.push({
+                        team: sortedTeams[teamIndex],
+                        pickNumber: pickNumber,
+                        displayOrder: round % 2 === 1 ? pickInRound - 1 : teamsCount - pickInRound
+                    });
+                }
+                
+                // Sort by display order to show teams in snake draft order
+                teamOrderForRound.sort((a, b) => a.displayOrder - b.displayOrder);
+                
+                for (let i = 0; i < teamOrderForRound.length; i++) {
+                    const {team, pickNumber} = teamOrderForRound[i];
+                    const isCurrent = pickNumber === currentPick;
+                    
+                    roundsHTML += `
+                        <div class="text-center px-1">
+                            ${LOGO_ONLY_MODE ? 
+                                // Logo-only mode: show team logo in header
+                                `<div class="flex justify-center mb-1">${createTeamLogo(team, 'w-6 h-6')}</div>
+                                 <div class="text-xs text-slate-400">#${pickNumber} ${isCurrent ? '⏱️' : ''}</div>` :
+                                // Normal mode: show team name
+                                `<div class="text-xs font-semibold text-slate-300 truncate">${team.name}</div>
+                                 <div class="text-xs text-slate-400">#${pickNumber} ${isCurrent ? '⏱️' : ''}</div>`
+                            }
+                        </div>
+                    `;
+                }
+                
+                roundsHTML += `
+                            </div>
+                        </div>
+                        
+                        <!-- Pick Cells Grid -->
+                        <div class="flex items-center">
+                            <div class="w-8 flex-shrink-0"></div> <!-- Spacer for round label -->
+                            <div class="flex-1 grid gap-1" style="grid-template-columns: repeat(${teamsCount}, 1fr);">
+                `;
+                
+                // Second pass: Generate pick cells focused on players using same team order
+                for (let i = 0; i < teamOrderForRound.length; i++) {
+                    const {team, pickNumber} = teamOrderForRound[i];
+                    const isPicked = pickNumber < currentPick;
+                    const isCurrent = pickNumber === currentPick;
+                    const pickData = pickMap[pickNumber];
+                    
+                    roundsHTML += `
+                        <div class="team-${team.color} rounded-md p-2 border transition-all duration-300 h-[70px] max-h-[70px] flex items-center justify-center overflow-hidden
+                            ${isCurrent ? 'border-yellow-400 timer-pulse' : 
+                              isPicked ? 'border-slate-500 bg-slate-700/30' : 'border-slate-600'}
+                        ">
+                            ${isPicked && pickData && pickData.player ? 
+                                // Player picked - focus on player info
+                                `<div class="text-center w-full">
+                                    ${createPlayerDisplay(pickData.player, true)}
+                                </div>` :
+                                // No player picked - show team logo or timer
+                                `<div class="text-center">
+                                    ${LOGO_ONLY_MODE ? 
+                                        // In logo-only mode, keep logo smaller since it's in header too
+                                        `${isCurrent ? '<div class="text-yellow-400 text-2xl">⏱️</div>' : 
+                                          createTeamLogo(team, 'w-6 h-6 mx-auto')}` :
+                                        // Normal mode - larger logo
+                                        `${createTeamLogo(team, 'w-8 h-8 lg:w-10 lg:h-10 mx-auto')}
+                                         ${isCurrent ? '<div class="text-yellow-400 text-lg mt-1">⏱️</div>' : ''}`
+                                    }
+                                </div>`
+                            }
+                        </div>
+                    `;
+                }
+                
+                roundsHTML += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = roundsHTML;
+        }
+
+
+
+        function showError() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Initialize and start refresh cycle
+        function init() {
+            fetchDraftData();
+            refreshInterval = setInterval(fetchDraftData, REFRESH_INTERVAL);
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

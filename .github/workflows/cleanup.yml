@@ -1,0 +1,191 @@
+# COMMENTED OUT - Setup in progress
+# name: Cleanup & Maintenance
+
+# on:
+#   schedule:
+#     # Run every Sunday at 2 AM UTC
+#     - cron: '0 2 * * 0'
+#   workflow_dispatch:
+#     inputs:
+#       cleanup_type:
+#         description: 'Type of cleanup to perform'
+#         required: true
+#         default: 'all'
+#         type: choice
+#         options:
+#           - all
+#           - cache
+#           - dependencies
+#           - docker
+
+jobs:
+  cleanup:
+    name: Cleanup & Maintenance
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Cleanup GitHub Actions cache
+      if: ${{ github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'cache' }}
+      uses: actions/github-script@v7
+      with:
+        script: |
+          console.log("Starting cache cleanup...");
+          
+          const caches = await github.rest.actions.getActionsCacheList({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100
+          });
+          
+          console.log(`Found ${caches.data.actions_caches.length} caches`);
+          
+          // Delete caches older than 7 days
+          const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          
+          for (const cache of caches.data.actions_caches) {
+            const cacheDate = new Date(cache.created_at);
+            if (cacheDate < oneWeekAgo) {
+              console.log(`Deleting cache: ${cache.key} (created: ${cache.created_at})`);
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  cache_id: cache.id,
+                });
+              } catch (error) {
+                console.log(`Failed to delete cache ${cache.id}: ${error.message}`);
+              }
+            }
+          }
+          
+          console.log("Cache cleanup completed");
+
+    - name: Check dependency updates
+      if: ${{ github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'dependencies' }}
+      run: |
+        echo "## 📦 Dependency Update Check" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Scheduled dependency update check completed on $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Recommendations:" >> $GITHUB_STEP_SUMMARY
+        echo "- Review Elixir dependencies: \`mix deps.unlock --check-unused\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Check for security updates: \`mix deps.audit\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Update Node.js packages: \`npm audit\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Consider creating a dependency update PR" >> $GITHUB_STEP_SUMMARY
+
+    - name: Docker cleanup notification
+      if: ${{ github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'docker' }}
+      run: |
+        echo "## 🐳 Docker Maintenance" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Container Registry Cleanup Recommendations:" >> $GITHUB_STEP_SUMMARY
+        echo "- Review old Docker images in GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
+        echo "- Consider implementing automatic image cleanup policy" >> $GITHUB_STEP_SUMMARY
+        echo "- Remove unused development images locally: \`docker system prune -a\`" >> $GITHUB_STEP_SUMMARY
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15.7'
+        otp-version: '26.1.2'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        mix local.hex --force
+        mix local.rebar --force
+        mix deps.get
+        npm ci
+
+    - name: Run Elixir security audit
+      run: |
+        echo "## 🔒 Security Audit Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Elixir Dependencies:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        mix deps.audit >> $GITHUB_STEP_SUMMARY 2>&1 || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+    - name: Run Node.js security audit
+      run: |
+        echo "### Node.js Dependencies:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        npm audit >> $GITHUB_STEP_SUMMARY 2>&1 || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+    - name: Check for hardcoded secrets
+      run: |
+        echo "### Secret Detection:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        
+        # Simple grep for common secrets (basic check)
+        echo "Checking for potential hardcoded secrets..." >> $GITHUB_STEP_SUMMARY
+        
+        # Check for common secret patterns
+        if grep -r -i "password\|secret\|key\|token" --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=deps --exclude-dir=_build . | grep -v "test\|example\|TODO\|FIXME" | head -10; then
+          echo "⚠️  Potential secrets found - manual review recommended" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No obvious hardcoded secrets detected" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  health-report:
+    name: Project Health Report
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate project health report
+      run: |
+        echo "# 📊 AceApp Project Health Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Generated on: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Repository stats
+        echo "## 📈 Repository Statistics" >> $GITHUB_STEP_SUMMARY
+        echo "- Total files: $(find . -type f ! -path './.git/*' ! -path './node_modules/*' ! -path './deps/*' ! -path './_build/*' | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "- Elixir files: $(find . -name '*.ex' -o -name '*.exs' | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "- JavaScript files: $(find . -name '*.js' ! -path './node_modules/*' | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "- CSS/SCSS files: $(find . -name '*.css' -o -name '*.scss' ! -path './node_modules/*' | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "- Total lines of code: $(find . -name '*.ex' -o -name '*.exs' -o -name '*.js' -o -name '*.css' -o -name '*.scss' ! -path './node_modules/*' ! -path './deps/*' ! -path './_build/*' | xargs wc -l | tail -1)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Recent activity
+        echo "## 📅 Recent Activity" >> $GITHUB_STEP_SUMMARY
+        echo "- Last commit: $(git log -1 --format='%h - %s (%cr by %an)')" >> $GITHUB_STEP_SUMMARY
+        echo "- Commits this week: $(git log --since='1 week ago' --oneline | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "- Contributors: $(git shortlog -sn | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # File structure health
+        echo "## 🏗️ Project Structure" >> $GITHUB_STEP_SUMMARY
+        echo "- Configuration files: ✅" >> $GITHUB_STEP_SUMMARY
+        echo "- Documentation: $([ -f README.md ] && echo "✅" || echo "❌")" >> $GITHUB_STEP_SUMMARY
+        echo "- Deployment config: $([ -f Dockerfile ] && echo "✅" || echo "❌")" >> $GITHUB_STEP_SUMMARY
+        echo "- CI/CD workflows: $(ls .github/workflows/*.yml 2>/dev/null | wc -l) workflows" >> $GITHUB_STEP_SUMMARY
+        echo "- Tests directory: $([ -d test ] && echo "✅" || echo "❌")" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "## 🎯 Recommendations" >> $GITHUB_STEP_SUMMARY
+        echo "- Regular dependency updates (monthly)" >> $GITHUB_STEP_SUMMARY
+        echo "- Security audit reviews (weekly)" >> $GITHUB_STEP_SUMMARY
+        echo "- Performance monitoring setup" >> $GITHUB_STEP_SUMMARY
+        echo "- Backup and disaster recovery testing" >> $GITHUB_STEP_SUMMARY

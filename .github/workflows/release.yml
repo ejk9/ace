@@ -1,0 +1,214 @@
+# COMMENTED OUT - Setup in progress
+# name: Release
+
+# on:
+#   push:
+#     tags:
+#       - 'v*.*.*'
+#   workflow_dispatch:
+#     inputs:
+#       version:
+#         description: 'Release version (e.g., v1.0.0)'
+#         required: true
+#         type: string
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        
+        if [ -z "$PREVIOUS_TAG" ]; then
+          echo "First release - getting all commits"
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" --reverse)
+        else
+          echo "Changes since $PREVIOUS_TAG"
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD)
+        fi
+        
+        # Create multiline output
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        release_name: AceApp ${{ steps.version.outputs.version }}
+        body: |
+          ## 🚀 AceApp ${{ steps.version.outputs.version }}
+          
+          League of Legends Draft Tool - Production Release
+          
+          ### 📋 Changes in this release:
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ### 🏁 Deployment
+          This release will be automatically deployed to production Railway environment.
+          
+          ### 📚 Documentation
+          - [Deployment Guide](https://github.com/${{ github.repository }}/blob/main/DEPLOYMENT.md)
+          - [Railway Setup](https://github.com/${{ github.repository }}/blob/main/RAILWAY_DEPLOYMENT_CHECKLIST.md)
+          
+          ### 🎮 Features
+          - Real-time League of Legends draft management
+          - Discord OAuth authentication
+          - Professional stream overlays
+          - Screenshot service for pick announcements
+          - Mock draft prediction system
+          
+          ---
+          
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false
+
+  deploy-production:
+    name: Deploy Production Release
+    needs: create-release
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Railway CLI
+      run: |
+        curl -fsSL https://railway.app/install.sh | sh
+        echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+    - name: Deploy to Railway Production
+      run: |
+        railway login --token ${{ secrets.RAILWAY_TOKEN }}
+        railway up --detach
+        
+        echo "✅ Production deployment initiated for ${{ needs.create-release.outputs.version }}"
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    - name: Run production migrations
+      run: |
+        railway run mix ecto.migrate
+        railway run mix setup_game_data --skip-migration || true
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    - name: Production health check
+      run: |
+        # Wait for deployment
+        sleep 60
+        
+        DOMAIN=$(railway domain 2>/dev/null || echo "")
+        
+        if [ ! -z "$DOMAIN" ]; then
+          echo "Running production health checks..."
+          
+          # Extended health check for production
+          for i in {1..20}; do
+            echo "Health check attempt $i/20..."
+            
+            # Check main health endpoint
+            if curl -f -s "https://$DOMAIN/health" > /dev/null; then
+              echo "✅ Main application healthy"
+              
+              # Check if we can load the homepage
+              if curl -f -s "https://$DOMAIN/" > /dev/null; then
+                echo "✅ Homepage accessible"
+                
+                # Check if authentication endpoint is responding
+                if curl -f -s "https://$DOMAIN/auth/discord" > /dev/null; then
+                  echo "✅ Authentication system accessible"
+                  echo "🎉 All production health checks passed!"
+                  exit 0
+                fi
+              fi
+            fi
+            
+            echo "⏳ Health check failed, retrying in 30s..."
+            sleep 30
+          done
+          
+          echo "❌ Production health checks failed after 20 attempts"
+          exit 1
+        else
+          echo "❌ Could not get Railway domain for health check"
+          exit 1
+        fi
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    - name: Notify release deployment
+      if: success()
+      run: |
+        DOMAIN=$(railway domain 2>/dev/null || echo "Production")
+        echo "🎉 Production release ${{ needs.create-release.outputs.version }} deployed successfully!"
+        echo "🌐 Production URL: https://$DOMAIN"
+        
+        # Optional: Send Discord notification
+        # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+        #   -H "Content-Type: application/json" \
+        #   -d '{
+        #     "embeds": [{
+        #       "title": "🚀 AceApp Production Release",
+        #       "description": "Version **${{ needs.create-release.outputs.version }}** deployed successfully!",
+        #       "color": 3447003,
+        #       "fields": [
+        #         {"name": "🌐 URL", "value": "https://'"$DOMAIN"'", "inline": true},
+        #         {"name": "📦 Version", "value": "${{ needs.create-release.outputs.version }}", "inline": true}
+        #       ],
+        #       "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"
+        #     }]
+        #   }'
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ Production deployment failed for ${{ needs.create-release.outputs.version }}"
+        railway logs --tail=50
+        
+        # Optional: Send failure notification
+        # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+        #   -H "Content-Type: application/json" \
+        #   -d '{
+        #     "embeds": [{
+        #       "title": "❌ AceApp Production Deployment Failed",
+        #       "description": "Version **${{ needs.create-release.outputs.version }}** failed to deploy",
+        #       "color": 15158332,
+        #       "fields": [
+        #         {"name": "🔗 Actions", "value": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}", "inline": false}
+        #       ],
+        #       "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"
+        #     }]
+        #   }'
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

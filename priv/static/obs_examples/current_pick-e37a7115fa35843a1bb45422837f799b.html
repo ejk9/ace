@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Current Pick Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Timer animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.02); }
+        }
+        .timer-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+
+        /* Team color gradients matching draft room */
+        .team-blue { background: linear-gradient(135deg, #1e293b, #1e3a8a); border-color: #3b82f6; }
+        .team-red { background: linear-gradient(135deg, #1e293b, #991b1b); border-color: #ef4444; }
+        .team-green { background: linear-gradient(135deg, #1e293b, #065f46); border-color: #10b981; }
+        .team-purple { background: linear-gradient(135deg, #1e293b, #581c87); border-color: #8b5cf6; }
+        .team-orange { background: linear-gradient(135deg, #1e293b, #9a3412); border-color: #f97316; }
+        .team-pink { background: linear-gradient(135deg, #1e293b, #be185d); border-color: #ec4899; }
+        .team-indigo { background: linear-gradient(135deg, #1e293b, #3730a3); border-color: #6366f1; }
+        .team-cyan { background: linear-gradient(135deg, #1e293b, #0e7490); border-color: #06b6d4; }
+        .team-amber { background: linear-gradient(135deg, #1e293b, #92400e); border-color: #f59e0b; }
+        .team-emerald { background: linear-gradient(135deg, #1e293b, #047857); border-color: #10b981; }
+    </style>
+</head>
+<body class="bg-transparent text-slate-100 m-0 p-0 overflow-hidden">
+    <!-- Loading State -->
+    <div id="loading" class="flex items-center justify-center w-full h-full min-h-[200px]">
+        <div class="text-center">
+            <div class="text-xl font-bold text-yellow-400 mb-2">Loading...</div>
+            <div class="text-slate-400 text-sm">Connecting to draft...</div>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="hidden flex items-center justify-center w-full h-full min-h-[200px]">
+        <div class="text-center">
+            <div class="text-xl font-bold text-red-400 mb-2">Connection Error</div>
+            <div class="text-slate-400 text-sm">Unable to load draft data</div>
+        </div>
+    </div>
+
+    <!-- Active Pick State -->
+    <div id="activePick" class="hidden">
+        <div id="pickCard" class="bg-slate-800 border-2 border-slate-700 rounded-2xl p-6 shadow-2xl slide-in max-w-md mx-auto">
+            <!-- Team Header -->
+            <div class="flex items-center space-x-4 mb-4">
+                <div id="teamLogo" class="w-16 h-16 rounded-full bg-slate-600 border-2 border-slate-500 flex-shrink-0">
+                    <!-- Logo will be populated here -->
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div id="teamName" class="text-2xl font-bold text-yellow-400 truncate">Team Name</div>
+                    <div id="pickInfo" class="text-slate-400">Pick #1 • Round 1</div>
+                </div>
+                <div class="text-yellow-400 text-3xl">⏱️</div>
+            </div>
+            
+            <!-- Draft Info -->
+            <div class="text-center mb-4">
+                <div id="draftName" class="text-lg font-semibold text-slate-200 mb-1">Draft Name</div>
+                <div class="text-sm text-slate-400">Now Picking</div>
+            </div>
+            
+            <!-- Timer Display -->
+            <div class="text-center">
+                <div id="timerDisplay" class="text-5xl font-bold text-yellow-400 mb-2">0:00</div>
+                <div class="text-sm text-slate-400">Time Remaining</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inactive State -->
+    <div id="inactiveState" class="hidden">
+        <div class="bg-slate-600 border-2 border-slate-500 rounded-2xl p-6 shadow-xl max-w-md mx-auto text-center">
+            <div class="mb-4">
+                <div class="w-16 h-16 rounded-full bg-slate-500 mx-auto mb-3 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div id="statusMessage" class="text-xl font-bold text-slate-300 mb-2">Draft Setup</div>
+                <div id="draftNameInactive" class="text-slate-400">Draft Name</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const urlParams = new URLSearchParams(window.location.search);
+        const DRAFT_ID = urlParams.get('draft_id');
+        
+        if (!DRAFT_ID) {
+            document.getElementById('loading').innerHTML = `
+                <div class="text-center">
+                    <div class="text-xl font-bold text-red-400 mb-2">Missing Draft ID</div>
+                    <div class="text-slate-400 text-sm">Please add ?draft_id=YOUR_DRAFT_ID to the URL</div>
+                </div>
+            `;
+            throw new Error('No draft ID provided');
+        }
+
+        const API_BASE = window.location.origin;
+        const REFRESH_INTERVAL = 1000; // 1 second for current pick (faster updates)
+
+        let refreshInterval;
+        let lastDataTimestamp = null;
+        let lastActiveState = null;
+
+        // Image caching to prevent glitching
+        const imageCache = new Map();
+        const imageLoadPromises = new Map();
+
+        // Team color mapping
+        const TEAM_COLORS = {
+            'blue': '#3b82f6', 'red': '#ef4444', 'green': '#10b981', 'purple': '#8b5cf6',
+            'orange': '#f97316', 'pink': '#ec4899', 'indigo': '#6366f1', 'cyan': '#06b6d4',
+            'amber': '#f59e0b', 'emerald': '#10b981'
+        };
+
+        // Role icon mapping (League of Legends roles)
+        const ROLE_ICONS = {
+            'top': '/images/roles/roleicon_top.png',
+            'jungle': '/images/roles/roleicon_jungle.png', 
+            'mid': '/images/roles/roleicon_middle.png',
+            'middle': '/images/roles/roleicon_middle.png',
+            'adc': '/images/roles/roleicon_bottom.png',
+            'bot': '/images/roles/roleicon_bottom.png',
+            'bottom': '/images/roles/roleicon_bottom.png',
+            'support': '/images/roles/roleicon_utility.png',
+            'utility': '/images/roles/roleicon_utility.png',
+            'supp': '/images/roles/roleicon_utility.png'
+        };
+
+        // Image loading utilities
+        function preloadImage(url) {
+            if (!url) return Promise.resolve(false);
+            if (imageCache.has(url)) return Promise.resolve(imageCache.get(url));
+            if (imageLoadPromises.has(url)) return imageLoadPromises.get(url);
+
+            const promise = new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    imageCache.set(url, true);
+                    imageLoadPromises.delete(url);
+                    resolve(true);
+                };
+                img.onerror = () => {
+                    imageCache.set(url, false);
+                    imageLoadPromises.delete(url);
+                    resolve(false);
+                };
+                img.src = url;
+            });
+
+            imageLoadPromises.set(url, promise);
+            return promise;
+        }
+
+        function createTeamLogo(team) {
+            const logoId = 'team-logo-img';
+            const cachedResult = imageCache.get(team.logo_url);
+            
+            if (team.logo_url && cachedResult === true) {
+                return `<img id="${logoId}" src="${team.logo_url}" class="w-full h-full rounded-full object-cover" alt="${team.name} logo">`;
+            } else {
+                // Show fallback immediately
+                const fallback = `<div id="${logoId}" class="w-full h-full rounded-full bg-gradient-to-br from-${team.color}-500 to-${team.color}-600 flex items-center justify-center text-white font-bold text-lg">${team.pick_order_position || '?'}</div>`;
+                
+                // Preload image if URL exists
+                if (team.logo_url && cachedResult === undefined) {
+                    preloadImage(team.logo_url).then(success => {
+                        if (success) {
+                            const logoElement = document.getElementById(logoId);
+                            if (logoElement) {
+                                logoElement.outerHTML = `<img id="${logoId}" src="${team.logo_url}" class="w-full h-full rounded-full object-cover" alt="${team.name} logo">`;
+                            }
+                        }
+                    });
+                }
+                
+                return fallback;
+            }
+        }
+
+        async function fetchDraftData() {
+            try {
+                const response = await fetch(`${API_BASE}/stream/${DRAFT_ID}/current.json`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Only update if data changed
+                if (data.timestamp !== lastDataTimestamp) {
+                    updateDisplay(data);
+                    lastDataTimestamp = data.timestamp;
+                }
+                hideError();
+            } catch (error) {
+                console.error('Failed to fetch current pick data:', error);
+                showError();
+            }
+        }
+
+        function updateDisplay(data) {
+            document.getElementById('loading').style.display = 'none';
+            
+            if (data.active && data.team) {
+                showActivePick(data);
+            } else {
+                showInactiveState(data);
+            }
+        }
+
+        function showActivePick(data) {
+            // Only update if state actually changed
+            const currentState = `${data.team.id}-${data.pick_info.number}-${data.timer.remaining_seconds}`;
+            if (currentState === lastActiveState) {
+                // Only update timer for performance
+                updateTimer(data.timer);
+                return;
+            }
+            lastActiveState = currentState;
+
+            document.getElementById('activePick').style.display = 'block';
+            document.getElementById('inactiveState').style.display = 'none';
+            
+            // Update team info
+            document.getElementById('teamName').textContent = data.team.name;
+            document.getElementById('pickInfo').textContent = 
+                `Pick #${data.pick_info.number} • Round ${data.pick_info.round}`;
+            document.getElementById('draftName').textContent = data.draft_name;
+            
+            // Update team logo
+            const logoContainer = document.getElementById('teamLogo');
+            const expectedLogoHtml = createTeamLogo(data.team);
+            if (logoContainer.innerHTML !== expectedLogoHtml) {
+                logoContainer.innerHTML = expectedLogoHtml;
+            }
+            
+            // Update card color scheme
+            const pickCard = document.getElementById('pickCard');
+            pickCard.className = `team-${data.team.color} border-2 rounded-2xl p-6 shadow-2xl slide-in max-w-md mx-auto`;
+            
+            // Update timer
+            updateTimer(data.timer);
+        }
+
+        function updateTimer(timer) {
+            const timerDisplay = document.getElementById('timerDisplay');
+            
+            if (timer && timer.remaining_seconds !== undefined) {
+                const minutes = Math.floor(timer.remaining_seconds / 60);
+                const seconds = timer.remaining_seconds % 60;
+                timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Color code and animate based on remaining time
+                let colorClass = 'text-yellow-400';
+                let pulseClass = '';
+                
+                if (timer.remaining_seconds <= 10) {
+                    colorClass = 'text-red-400';
+                    pulseClass = 'timer-pulse';
+                } else if (timer.remaining_seconds <= 30) {
+                    colorClass = 'text-orange-400';
+                }
+                
+                timerDisplay.className = `text-5xl font-bold ${colorClass} ${pulseClass} mb-2`;
+            } else {
+                timerDisplay.textContent = '--:--';
+                timerDisplay.className = 'text-5xl font-bold text-slate-400 mb-2';
+            }
+        }
+
+        function showInactiveState(data) {
+            lastActiveState = null; // Reset active state
+            
+            document.getElementById('activePick').style.display = 'none';
+            document.getElementById('inactiveState').style.display = 'block';
+            
+            // Update status message
+            const statusMessage = document.getElementById('statusMessage');
+            const draftName = document.getElementById('draftNameInactive');
+            
+            if (data.message) {
+                statusMessage.textContent = data.message;
+            } else {
+                switch (data.draft_status) {
+                    case 'setup':
+                        statusMessage.textContent = 'Draft Setup in Progress';
+                        break;
+                    case 'completed':
+                        statusMessage.textContent = 'Draft Complete';
+                        break;
+                    case 'paused':
+                        statusMessage.textContent = 'Draft Paused';
+                        break;
+                    default:
+                        statusMessage.textContent = 'Waiting for Draft';
+                }
+            }
+            
+            draftName.textContent = data.draft_name || 'Draft';
+        }
+
+        function showError() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('activePick').style.display = 'none';
+            document.getElementById('inactiveState').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Initialize
+        function init() {
+            fetchDraftData();
+            refreshInterval = setInterval(fetchDraftData, REFRESH_INTERVAL);
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ace_app_postgres
+    environment:
+      POSTGRES_DB: ace_app_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  screenshot_service:
+    build:
+      context: ./screenshot_service
+      dockerfile: Dockerfile
+    container_name: ace_app_screenshots
+    platform: linux/arm64
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./priv/static/screenshots:/home/pptruser/app/screenshots
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

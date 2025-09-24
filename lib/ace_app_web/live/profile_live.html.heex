@@ -1,0 +1,201 @@
+<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+  <!-- Header -->
+  <div class="bg-slate-800/50 border-b border-slate-700">
+    <div class="mx-auto max-w-7xl px-6 py-8">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-6">
+          <!-- User Avatar -->
+          <div class="relative">
+            <img src={@current_user.discord_avatar_url || "/images/default-avatar.png"} 
+                 alt={@current_user.discord_username} 
+                 class="h-20 w-20 rounded-full ring-4 ring-slate-600" />
+            <%= if @current_user.is_admin do %>
+              <span class="absolute -bottom-1 -right-1 bg-yellow-500 text-slate-900 text-xs px-2 py-1 rounded-full font-semibold">
+                ADMIN
+              </span>
+            <% end %>
+          </div>
+          
+          <!-- User Info -->
+          <div>
+            <h1 class="text-3xl font-bold text-white">
+              <%= @current_user.discord_username %>
+            </h1>
+            <p class="text-slate-300 mt-1">
+              Discord ID: <%= @current_user.discord_id %>
+            </p>
+            <%= if @current_user.discord_email do %>
+              <p class="text-slate-400 text-sm mt-1">
+                <%= @current_user.discord_email %>
+              </p>
+            <% end %>
+            <p class="text-slate-400 text-sm mt-1">
+              Last login: <%= Calendar.strftime(@current_user.last_login_at, "%B %d, %Y at %I:%M %p") %>
+            </p>
+          </div>
+        </div>
+        
+        <!-- Back Button -->
+        <div class="flex items-center gap-4">
+          <.link 
+            navigate="/drafts"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700/50 hover:text-white transition-colors"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Drafts
+          </.link>
+          
+          <!-- Logout Button -->
+          <.link 
+            href="/auth/logout" 
+            method="delete"
+            class="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+            Logout
+          </.link>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="mx-auto max-w-7xl px-6 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <!-- Draft Statistics -->
+      <div class="lg:col-span-1">
+        <div class="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+          <h2 class="text-xl font-semibold text-white mb-6">Draft Statistics</h2>
+          
+          <div class="space-y-4">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-300">Total Drafts</span>
+              <span class="text-2xl font-bold text-yellow-400"><%= @draft_stats.total_drafts %></span>
+            </div>
+            
+            <div class="border-t border-slate-600 pt-4 space-y-3">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <span class="text-slate-300 text-sm">Setup</span>
+                </div>
+                <span class="text-slate-300"><%= @draft_stats.setup_drafts %></span>
+              </div>
+              
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                  <span class="text-slate-300 text-sm">Active</span>
+                </div>
+                <span class="text-slate-300"><%= @draft_stats.active_drafts %></span>
+              </div>
+              
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span class="text-slate-300 text-sm">Completed</span>
+                </div>
+                <span class="text-slate-300"><%= @draft_stats.completed_drafts %></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Drafts -->
+      <div class="lg:col-span-2">
+        <div class="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+          <h2 class="text-xl font-semibold text-white mb-6">Recent Drafts</h2>
+          
+          <%= if length(@user_drafts) > 0 do %>
+            <div class="space-y-4">
+              <%= for draft <- Enum.take(@user_drafts, 10) do %>
+                <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                      <h3 class="font-semibold text-white"><%= draft.name %></h3>
+                      <div class="flex items-center gap-4 mt-2 text-sm text-slate-400">
+                        <span>Created <%= Calendar.strftime(draft.inserted_at, "%b %d, %Y") %></span>
+                        <span>•</span>
+                        <span><%= length(draft.teams) %> teams</span>
+                        <span>•</span>
+                        <span class="capitalize"><%= draft.format %> format</span>
+                      </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                      <!-- Draft Status Badge -->
+                      <% {badge_class, status_text} = get_draft_status_badge(draft) %>
+                      <span class={"inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset #{badge_class}"}>
+                        <%= status_text %>
+                      </span>
+                      
+                      <!-- Action Buttons -->
+                      <%= if draft.status in [:setup] do %>
+                        <.link 
+                          navigate={~p"/drafts/#{draft.id}/setup"}
+                          class="inline-flex items-center gap-1 rounded bg-yellow-600 hover:bg-yellow-700 px-3 py-1 text-xs font-semibold text-white transition-colors"
+                        >
+                          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                          </svg>
+                          Edit
+                        </.link>
+                      <% else %>
+                        <.link 
+                          navigate={~p"/drafts/#{draft.organizer_token}"}
+                          class="inline-flex items-center gap-1 rounded bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs font-semibold text-white transition-colors"
+                        >
+                          <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                          </svg>
+                          View
+                        </.link>
+                      <% end %>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+              
+              <%= if length(@user_drafts) > 10 do %>
+                <div class="text-center pt-4">
+                  <.link 
+                    navigate="/drafts"
+                    class="text-yellow-400 hover:text-yellow-300 text-sm font-medium"
+                  >
+                    View all <%= @draft_stats.total_drafts %> drafts →
+                  </.link>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="text-center py-8">
+              <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-slate-300">No drafts yet</h3>
+              <p class="mt-1 text-sm text-slate-500">Get started by creating your first draft.</p>
+              <div class="mt-6">
+                <.link 
+                  navigate="/drafts/new"
+                  class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 px-4 py-2 text-sm font-semibold text-slate-900 hover:from-yellow-600 hover:to-yellow-700 transition-all duration-200"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                  </svg>
+                  Create Draft
+                </.link>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

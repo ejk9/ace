@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Popup Screenshot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Enhanced backdrop blur */
+    .backdrop-blur-custom {
+      backdrop-filter: blur(16px);
+    }
+  </style>
+</head>
+<body class="bg-black overflow-hidden">
+  <!-- Full-Screen Champion Splash Art Popup - Tournament Style -->
+  <div id="champion-splash-popup" class="fixed inset-0 w-screen h-screen">
+    <div class="relative w-full h-full">
+      <!-- Full-Screen Champion Splash Art Background -->
+      <div class="absolute inset-0">
+        <%= if @player_data.champion_image && @player_data.champion_image != "" do %>
+          <img src={@player_data.champion_image} alt="Champion Splash Art" class="w-full h-full object-cover object-center"/>
+        <% else %>
+          <!-- Default background when no champion image -->
+          <div class="w-full h-full bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 flex items-center justify-center">
+            <div class="text-slate-400 text-4xl font-bold opacity-50">League of Legends</div>
+          </div>
+        <% end %>
+        
+        <!-- Dark overlay for text readability - matching draft overlay -->
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/30 to-transparent"></div>
+        
+        <!-- Floating Champion Info - Top Right -->
+        <%= if @player_data.champion_name && @player_data.champion_name != "" do %>
+          <div class="absolute top-4 right-4 bg-black/40 backdrop-blur-custom rounded-lg px-3 py-2 border border-white/10">
+            <div class="text-right">
+              <h3 class="text-sm font-medium text-white"><%= @player_data.champion_name %></h3>
+              <%= if @player_data.champion_title && @player_data.champion_title != "" do %>
+                <p class="text-xs text-slate-400 italic"><%= @player_data.champion_title %></p>
+              <% end %>
+              <%= if @player_data.skin_name && @player_data.skin_name != "" && @player_data.skin_name != nil do %>
+                <p class="text-amber-300 text-xs font-medium mt-1"><%= @player_data.skin_name %></p>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+      
+      <!-- Player Info (Hero Section) - Bottom Third like Draft Overlay -->
+      <div class="absolute inset-x-0 bottom-0 flex items-end justify-center pb-16">
+        <div class="text-center relative z-10 max-w-4xl mx-auto px-8">
+          <!-- Glow effect behind player name - matching draft overlay -->
+          <div class="absolute inset-0 bg-gradient-to-t from-yellow-500/5 to-transparent rounded-b-2xl"></div>
+          
+          <div class="relative z-10">
+            <!-- Player Name - EXACT match to draft overlay styling -->
+            <div class="mb-6">
+              <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 mb-3 drop-shadow-2xl tracking-wide leading-tight">
+                <%= @player_data.player_name %>
+              </h1>
+              
+              <!-- Team Info with enhanced design - matching draft overlay -->
+              <div class="flex items-center justify-center space-x-4 mb-4">
+                <div class="flex items-center space-x-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                  <div class={"w-5 h-5 rounded-full shadow-lg ring-2 ring-white/30 #{@player_data.team_color}"}></div>
+                  <span class="text-lg font-bold text-white"><%= @player_data.team_name %></span>
+                </div>
+              </div>
+              
+              <!-- Player Role with enhanced badge - matching draft overlay -->
+              <%= if @player_data.player_role && @player_data.player_role != "" do %>
+                <div class="inline-flex items-center bg-gradient-to-r from-blue-500/90 to-purple-600/90 backdrop-blur-sm px-6 py-3 rounded-full text-sm font-bold text-white shadow-xl border border-white/20 uppercase tracking-wider space-x-3">
+                  <!-- League Role Icon -->
+                  <%= case String.downcase(@player_data.player_role) do %>
+                    <% "top" -> %>
+                      <img src="/images/roles/roleicon_top.png" alt="Top" class="w-6 h-6">
+                    <% "jungle" -> %>
+                      <img src="/images/roles/roleicon_jungle.png" alt="Jungle" class="w-6 h-6">
+                    <% "mid" -> %>
+                      <img src="/images/roles/roleicon_middle.png" alt="Mid" class="w-6 h-6">
+                    <% "adc" -> %>
+                      <img src="/images/roles/roleicon_bottom.png" alt="ADC" class="w-6 h-6">
+                    <% "support" -> %>
+                      <img src="/images/roles/roleicon_utility.png" alt="Support" class="w-6 h-6">
+                    <% _ -> %>
+                      <!-- Fallback icon for unknown roles -->
+                      <div class="w-6 h-6 bg-white/20 rounded-full"></div>
+                  <% end %>
+                  <span><%= @player_data.player_role %></span>
+                </div>
+              <% end %>
+            </div>
+            
+            <!-- Pick Context - matching draft overlay style -->
+            <div class="text-center opacity-80">
+              <div class="inline-flex items-center space-x-2 text-slate-300">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                <span class="text-sm font-medium">
+                  Round <%= @player_data.round_number %> • Pick <%= @player_data.pick_number %>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

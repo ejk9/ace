@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Available Players Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scroll styling */
+        .scroll-container {
+            scrollbar-width: thin;
+            scrollbar-color: #475569 #1e293b;
+        }
+        .scroll-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Role animations */
+        @keyframes fadeIn {
+            from {
+                transform: translateY(10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        /* Role section styling */
+        .role-section {
+            transition: all 0.3s ease;
+        }
+        .role-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Role-specific colors */
+        .role-top { border-left: 4px solid #ef4444; }
+        .role-jungle { border-left: 4px solid #10b981; }
+        .role-mid { border-left: 4px solid #3b82f6; }
+        .role-adc { border-left: 4px solid #f59e0b; }
+        .role-support { border-left: 4px solid #8b5cf6; }
+        .role-unassigned { border-left: 4px solid #6b7280; }
+
+        /* Responsive design utilities */
+        .responsive-container {
+            min-height: 0;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 m-0 p-0 overflow-hidden">
+    <!-- Loading State -->
+    <div id="loading" class="flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-yellow-400 mb-4">Loading Available Players...</div>
+            <div class="text-slate-400">Connecting to draft...</div>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="hidden flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-red-400 mb-4">Connection Error</div>
+            <div class="text-slate-400">Unable to load player data</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="content" class="hidden h-screen bg-slate-900 text-slate-100 flex flex-col">
+        <!-- Expanded Header -->
+        <div class="bg-slate-800 border-b border-slate-700 px-8 py-4 flex-shrink-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-6">
+                    <h1 id="draftTitle" class="text-3xl font-bold text-yellow-400">Draft Name</h1>
+                    <div class="px-4 py-2 rounded-full text-sm font-medium bg-slate-600 text-slate-200">
+                        Available Players
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-8">
+                    <div id="availableCount" class="text-2xl font-bold text-yellow-400">0 Available</div>
+                    <div id="draftStatus" class="text-lg text-slate-400">SETUP</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Expanded Players Grid -->
+        <div class="flex-1 overflow-y-auto scroll-container p-6">
+            <div id="roleGroups" class="grid gap-4">
+                <!-- Role group sections will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const urlParams = new URLSearchParams(window.location.search);
+        const DRAFT_ID = urlParams.get('draft_id');
+        
+        if (!DRAFT_ID) {
+            document.getElementById('loading').innerHTML = `
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-red-400 mb-4">Missing Draft ID</div>
+                    <div class="text-slate-400">Please add ?draft_id=YOUR_DRAFT_ID to the URL</div>
+                </div>
+            `;
+            throw new Error('No draft ID provided');
+        }
+
+        const API_BASE = window.location.origin;
+        const REFRESH_INTERVAL = 3000; // 3 seconds for available players
+
+        let refreshInterval;
+        let lastDataTimestamp = null;
+        let lastRoleGroupsState = null;
+
+        // Role icon mapping (League of Legends roles)
+        const ROLE_ICONS = {
+            'top': '/images/roles/roleicon_top.png',
+            'jungle': '/images/roles/roleicon_jungle.png', 
+            'mid': '/images/roles/roleicon_middle.png',
+            'adc': '/images/roles/roleicon_bottom.png',
+            'support': '/images/roles/roleicon_utility.png',
+            'unassigned': null
+        };
+
+        // Role colors for styling
+        const ROLE_COLORS = {
+            'top': 'role-top',
+            'jungle': 'role-jungle', 
+            'mid': 'role-mid',
+            'adc': 'role-adc',
+            'support': 'role-support',
+            'unassigned': 'role-unassigned'
+        };
+
+        function getRoleIcon(role, size = 'w-4 h-4') {
+            const iconUrl = ROLE_ICONS[role];
+            if (iconUrl) {
+                return `<img src="${iconUrl}" class="${size} opacity-80" alt="${role}" />`;
+            }
+            return `<div class="${size} bg-slate-500 rounded-sm opacity-60"></div>`;
+        }
+
+        function createPlayerCard(player) {
+            return `
+                <div class="bg-slate-700 rounded-lg p-3 border border-slate-600 transition-all duration-200 hover:border-slate-500 hover:bg-slate-600/80 fade-in">
+                    <div class="text-center">
+                        <!-- Player name - responsive, with proper overflow handling -->
+                        <div class="text-base font-medium text-slate-100 truncate" title="${player.display_name}">${player.display_name}</div>
+                        ${player.preferred_roles && player.preferred_roles.length > 1 ? 
+                            `<div class="text-sm text-slate-400 mt-1 truncate">${player.preferred_roles.filter(role => normalizeRole(role) !== 'unassigned').slice(0, 2).join(', ')}</div>` : 
+                            ''
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+        function createRoleSection(roleGroup, index) {
+            if (roleGroup.count === 0) {
+                return ''; // Don't show empty role sections
+            }
+
+            const roleColorClass = ROLE_COLORS[roleGroup.role] || 'role-unassigned';
+            
+            return `
+                <div class="role-section bg-slate-800 rounded-xl border border-slate-700 ${roleColorClass}" style="animation-delay: ${index * 0.1}s">
+                    <!-- Expanded Role Header -->
+                    <div class="px-6 py-4 border-b border-slate-700">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                ${getRoleIcon(roleGroup.role, 'w-8 h-8')}
+                                <div>
+                                    <h3 class="text-2xl font-bold text-slate-100">${roleGroup.role_display}</h3>
+                                    <div class="text-sm text-slate-400">${roleGroup.count} player${roleGroup.count !== 1 ? 's' : ''} available</div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-3xl font-bold text-yellow-400">${roleGroup.count}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Expanded Players List -->
+                    <div class="p-4">
+                        <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); max-width: 100%;">
+                            ${roleGroup.players.map(player => createPlayerCard(player)).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+
+
+        function normalizeRole(role) {
+            const normalized = role.toLowerCase().trim();
+            switch (normalized) {
+                case 'top': return 'top';
+                case 'jungle': case 'jg': return 'jungle';
+                case 'mid': case 'middle': return 'mid';
+                case 'adc': case 'bot': case 'bottom': return 'adc';
+                case 'support': case 'utility': case 'supp': return 'support';
+                default: return 'unassigned';
+            }
+        }
+
+        function deepEqual(obj1, obj2) {
+            return JSON.stringify(obj1) === JSON.stringify(obj2);
+        }
+
+        async function fetchAvailablePlayersData() {
+            try {
+                const response = await fetch(`${API_BASE}/stream/${DRAFT_ID}/available.json`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Only update if data has changed
+                if (data.timestamp !== lastDataTimestamp) {
+                    updateAvailablePlayers(data);
+                    lastDataTimestamp = data.timestamp;
+                }
+                hideError();
+            } catch (error) {
+                console.error('Failed to fetch available players data:', error);
+                showError();
+            }
+        }
+
+        function updateAvailablePlayers(data) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'flex';
+            
+            // Update header info
+            updateHeader(data);
+            
+            // Only update role groups if they changed
+            if (!deepEqual(data.role_groups, lastRoleGroupsState)) {
+                updateRoleGroups(data.role_groups);
+                lastRoleGroupsState = data.role_groups;
+            }
+        }
+
+        function updateHeader(data) {
+            document.getElementById('draftTitle').textContent = data.draft.name;
+            document.getElementById('availableCount').textContent = `${data.total_available} Available`;
+            
+            const statusElement = document.getElementById('draftStatus');
+            const status = data.draft.status.toUpperCase();
+            statusElement.textContent = status;
+            
+            // Color code status
+            statusElement.className = `text-xs sm:text-sm ${
+                status === 'ACTIVE' ? 'text-green-400' :
+                status === 'PAUSED' ? 'text-orange-400' :
+                status === 'COMPLETED' ? 'text-purple-400' :
+                'text-slate-400'
+            }`;
+        }
+
+        function updateRoleGroups(roleGroups) {
+            const container = document.getElementById('roleGroups');
+            
+            // Filter out empty role groups and create HTML
+            const nonEmptyGroups = roleGroups.filter(group => group.count > 0);
+            
+            if (nonEmptyGroups.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12">
+                        <div class="text-6xl mb-4">🎉</div>
+                        <div class="text-2xl font-bold text-yellow-400 mb-2">All Players Drafted!</div>
+                        <div class="text-slate-400">No players remaining in the pool</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Responsive grid that prevents overflow
+            let gridClass;
+            const screenWidth = window.innerWidth;
+            
+            if (nonEmptyGroups.length === 1) {
+                gridClass = 'grid-cols-1';
+            } else if (nonEmptyGroups.length === 2) {
+                gridClass = 'grid-cols-2';
+            } else if (nonEmptyGroups.length === 3) {
+                gridClass = screenWidth < 1200 ? 'grid-cols-2' : 'grid-cols-3';
+            } else if (nonEmptyGroups.length === 4) {
+                gridClass = screenWidth < 1200 ? 'grid-cols-2' : 'grid-cols-4';
+            } else if (nonEmptyGroups.length === 5) {
+                gridClass = screenWidth < 1400 ? 'grid-cols-3' : 'grid-cols-5';
+            } else {
+                // For 6+ groups, use max 4 columns to prevent overflow
+                gridClass = screenWidth < 1200 ? 'grid-cols-2' : screenWidth < 1600 ? 'grid-cols-3' : 'grid-cols-4';
+            }
+            
+            container.className = `grid gap-2 ${gridClass}`;
+            
+            container.innerHTML = nonEmptyGroups
+                .map((group, index) => createRoleSection(group, index))
+                .join('');
+        }
+
+        function showError() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Initialize and start refresh cycle
+        function init() {
+            fetchAvailablePlayersData();
+            refreshInterval = setInterval(fetchAvailablePlayersData, REFRESH_INTERVAL);
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
