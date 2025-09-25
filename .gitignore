@@ -37,3 +37,8 @@ npm-debug.log
 
 node_modules/
 test-results/
+
+# Ignore generated screenshot examples and static files
+/priv/static/screenshots_examples/
+/priv/static/obs_examples/*.gz
+/priv/static/obs_examples/*-*.html
