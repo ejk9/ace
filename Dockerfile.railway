@@ -33,6 +33,9 @@ RUN npm ci --only=production --silent
 # Copy application code
 COPY . .
 
+# Force dependency resolution to fix lock conflicts before build
+RUN mix deps.get --force
+
 # Build everything in one optimized step
 RUN mix deps.compile && \
     mix compile --warnings-as-errors && \
