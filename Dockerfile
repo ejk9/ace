@@ -1,67 +1,17 @@
-# Use the official Elixir image
+# Single-stage build optimized for Railway - using regular slim for faster builds
 FROM hexpm/elixir:1.15.7-erlang-26.1.2-debian-bookworm-20231009-slim
 
-# Install system dependencies
+# Install system dependencies in a single layer
 RUN apt-get update -y && apt-get install -y \
   build-essential \
   git \
   nodejs \
   npm \
-  inotify-tools \
-  && apt-get clean && rm -f /var/lib/apt/lists/*_*
-
-# Create app directory
-WORKDIR /app
-
-# Install hex and rebar
-RUN mix local.hex --force && \
-    mix local.rebar --force
-
-# Copy mix files with updated lock
-COPY mix.exs mix.lock ./
-
-# Get all dependencies (including dev deps needed for asset compilation)
-RUN mix deps.get
-
-# Copy package.json for Node dependencies
-COPY package*.json ./
-
-# Install Node.js dependencies (for E2E tests and development tools)
-RUN npm install
-
-# Copy source code
-COPY . .
-
-# Compile dependencies
-RUN mix deps.compile
-
-# Force dependency resolution before asset setup to avoid lock conflicts
-RUN mix deps.get --force
-
-# Setup and compile assets (Phoenix uses esbuild/tailwind directly)
-RUN mix assets.setup
-RUN mix assets.deploy
-
-# Clean up dev dependencies for smaller final image
-RUN mix deps.get --only prod
-
-# Compile the release
-RUN MIX_ENV=prod mix compile
-
-# Build the release
-RUN MIX_ENV=prod mix release
-
-# Runtime stage
-FROM debian:bookworm-slim
-
-# Install runtime dependencies
-RUN apt-get update -y && apt-get install -y \
-  libstdc++6 \
-  openssl \
-  libncurses5 \
+  curl \
   locales \
   ca-certificates \
-  && apt-get clean && rm -f /var/lib/apt/lists/*_*
+  --no-install-recommends \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
@@ -69,20 +19,40 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-# Create app user
-RUN useradd --create-home app
+# Set working directory
 WORKDIR /app
-USER app
 
-# Copy the release
-COPY --from=0 --chown=app:app /app/_build/prod/rel/ace_app ./
+# Install hex and rebar
+RUN mix local.hex --force && mix local.rebar --force
+
+# Set production environment
+ENV MIX_ENV=prod
+ENV NODE_ENV=production
+ENV PHX_SERVER=true
+
+# Copy dependency files first for better Docker layer caching
+COPY mix.exs mix.lock package*.json ./
+
+# Get production dependencies only
+RUN mix deps.get --only prod
+
+# Install Node.js dependencies
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Compile everything and build release in minimal steps
+RUN mix deps.compile \
+  && mix compile \
+  && mix assets.setup \
+  && mix assets.deploy \
+  && mix release \
+  && rm -rf _build/prod/lib/*/priv/static \
+  && rm -rf node_modules
 
 # Expose port
 EXPOSE 4000
 
-# Set environment
-ENV MIX_ENV=prod
-ENV PHX_SERVER=true
-
-# Start the application
-CMD ["bin/ace_app", "start"]
+# Start the application directly (no multi-stage complexity)
+CMD ["_build/prod/rel/ace_app/bin/ace_app", "start"]
