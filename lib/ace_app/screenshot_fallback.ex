@@ -10,7 +10,7 @@ defmodule AceApp.ScreenshotFallback do
   Creates a simple placeholder screenshot file for Discord notifications.
   Returns the file path if successful.
   """
-  def create_placeholder_screenshot(player, pick, draft) do
+  def create_placeholder_screenshot(player, pick, _draft) do
     try do
       team = AceApp.Drafts.get_team!(pick.team_id)
       

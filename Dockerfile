@@ -5,8 +5,6 @@ FROM hexpm/elixir:1.15.7-erlang-26.1.2-debian-bookworm-20231009-slim
 RUN apt-get update -y && apt-get install -y \
   build-essential \
   git \
-  nodejs \
-  npm \
   curl \
   locales \
   ca-certificates \
@@ -27,32 +25,40 @@ RUN mix local.hex --force && mix local.rebar --force
 
 # Set production environment
 ENV MIX_ENV=prod
-ENV NODE_ENV=production
 ENV PHX_SERVER=true
 
 # Copy dependency files first for better Docker layer caching
-COPY mix.exs mix.lock package*.json ./
+COPY mix.exs mix.lock ./
 
-# Get production dependencies only
-RUN mix deps.get --only prod
-
-# Install Node.js dependencies
-RUN npm ci --only=production
+# Get production dependencies and compile them - add dependency resolution step
+RUN mix deps.get --only prod && mix deps.compile && mix deps.compile
 
 # Copy source code
 COPY . .
 
-# Compile everything and build release in minimal steps
-RUN mix deps.compile \
-  && mix compile \
-  && mix assets.setup \
-  && mix assets.deploy \
-  && mix release \
-  && rm -rf _build/prod/lib/*/priv/static \
-  && rm -rf node_modules
+# Break down the build process into separate steps for better debugging
+RUN mix compile
+
+# Asset compilation in separate steps to isolate timeout issues
+RUN mix assets.setup
+RUN mix assets.deploy
+
+# Build release and cleanup
+RUN mix release
+RUN rm -rf _build/prod/lib/*/priv/static
+RUN rm -rf node_modules
+# Compile application
+RUN mix compile
+
+# Build assets using Mix (esbuild/tailwind, not npm)
+RUN mix assets.deploy
+
+# Build release and cleanup
+RUN mix release
+RUN rm -rf _build/prod/lib/*/priv/static
 
 # Expose port
 EXPOSE 4000
 
-# Start the application directly (no multi-stage complexity)
+# Start the application directly
 CMD ["_build/prod/rel/ace_app/bin/ace_app", "start"]

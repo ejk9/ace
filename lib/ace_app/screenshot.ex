@@ -157,7 +157,7 @@ defmodule AceApp.Screenshot do
   Placeholder for future HTML-to-image screenshot implementation.
   This would capture the actual champion splash popup HTML content.
   """
-  def capture_html_element(html_content, element_selector, options \\ %{}) do
+  def capture_html_element(_html_content, _element_selector, _options \\ %{}) do
     # This is where we would implement actual screenshot capture
     # Options could include:
     # - width/height
@@ -241,24 +241,4 @@ defmodule AceApp.Screenshot do
   end
 
   defp get_primary_role(_), do: ""
-
-  defp ensure_screenshot_directory(draft_id) do
-    dir = Path.join([
-      Application.get_env(:ace_app, :uploads_path, "priv/static/uploads"),
-      "drafts",
-      to_string(draft_id),
-      "screenshots"
-    ])
-    
-    File.mkdir_p!(dir)
-    dir
-  end
-
-  defp generate_screenshot_filename(champion, pick) do
-    timestamp = System.system_time(:second)
-    champion_key = champion.key || String.downcase(champion.name)
-    pick_number = pick.pick_number || "unknown"
-    
-    "#{champion_key}_pick#{pick_number}_#{timestamp}.jpg"
-  end
 end

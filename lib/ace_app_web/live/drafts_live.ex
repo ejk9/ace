@@ -111,7 +111,7 @@ defmodule AceAppWeb.DraftsLive do
 
   @impl true
   def handle_event("archive_draft", %{"draft-id" => draft_id}, socket) do
-    case Drafts.get_draft(draft_id) do
+    case Drafts.get_draft!(draft_id) do
       %{status: status} = draft when status in [:active, :paused] ->
         case Drafts.update_draft(draft, %{status: :completed}) do
           {:ok, _draft} ->
@@ -137,7 +137,7 @@ defmodule AceAppWeb.DraftsLive do
   end
 
   def handle_event("delete_draft", %{"draft-id" => draft_id}, socket) do
-    case Drafts.get_draft(draft_id) do
+    case Drafts.get_draft!(draft_id) do
       %{status: :setup} = draft ->
         case Drafts.delete_draft(draft) do
           {:ok, _draft} ->

@@ -82,11 +82,6 @@ defmodule AceApp.DiscordQueue do
   end
 
   @impl true
-  def handle_call(:get_state, _from, state) do
-    {:reply, state, state}
-  end
-
-  @impl true
   def handle_cast({:enqueue_pick, draft, pick, player}, state) do
     item = {:pick_notification, draft, pick, player}
     new_queue = :queue.in(item, state.queue)
@@ -124,6 +119,11 @@ defmodule AceApp.DiscordQueue do
     end
     
     {:noreply, new_state}
+  end
+
+  @impl true
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
   end
 
   @impl true
