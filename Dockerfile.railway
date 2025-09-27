@@ -30,23 +30,15 @@ ENV PHX_SERVER=true
 # Copy dependency files first for better Docker layer caching
 COPY mix.exs mix.lock ./
 
-# Get production dependencies and compile them - add dependency resolution step
-RUN mix deps.get --only prod && mix deps.compile && mix deps.compile
+# Get production dependencies and compile them
+RUN mix deps.get --only prod && mix deps.compile
 
 # Copy source code
 COPY . .
 
-# Break down the build process into separate steps for better debugging
-RUN mix compile
+# Update dependencies after copying source (fixes heroicons lock issue)
+RUN mix deps.get --only prod
 
-# Asset compilation in separate steps to isolate timeout issues
-RUN mix assets.setup
-RUN mix assets.deploy
-
-# Build release and cleanup
-RUN mix release
-RUN rm -rf _build/prod/lib/*/priv/static
-RUN rm -rf node_modules
 # Compile application
 RUN mix compile
 
