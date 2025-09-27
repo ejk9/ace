@@ -12,14 +12,13 @@ defmodule AceApp.Release do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
     end
     
-    # Populate champion data after migrations
+    # Setup game data after migrations
     setup_game_data()
   end
   
   def setup_game_data do
     load_app()
-    # Call the same logic as the mix task
-    Mix.Task.run("setup_game_data", ["--skip-migration"])
+    AceApp.GameDataSetup.setup_all_data()
   end
 
   def rollback(repo, version) do
