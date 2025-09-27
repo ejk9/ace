@@ -710,12 +710,12 @@ defmodule AceAppWeb.DraftSetupLive do
         # Copy file to destination
         File.cp!(path, dest)
         
-        %{
+        {:ok, %{
           filename: filename,
           original_path: dest,
           content_type: entry.client_type,
           file_size: entry.client_size
-        }
+        }}
       end)
 
     # Update team params with logo info if file was uploaded
