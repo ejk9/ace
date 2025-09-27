@@ -69,49 +69,12 @@ defmodule AceAppWeb.DraftsLive do
 
 
 
-  defp get_draft_status_badge(draft) do
-    case draft.status do
-      :setup -> {"bg-yellow-500/20 text-yellow-400 ring-yellow-500/30", "Setup"}
-      :active -> {"bg-green-500/20 text-green-400 ring-green-500/30", "Active"}
-      :paused -> {"bg-orange-500/20 text-orange-400 ring-orange-500/30", "Paused"}
-      :completed -> {"bg-blue-500/20 text-blue-400 ring-blue-500/30", "Completed"}
-      _ -> {"bg-gray-500/20 text-gray-400 ring-gray-500/30", "Unknown"}
-    end
-  end
 
-  defp format_created_at(created_at) do
-    case created_at do
-      %DateTime{} = dt ->
-        dt
-        |> DateTime.shift_zone!("Etc/UTC")
-        |> Calendar.strftime("%b %d, %Y at %I:%M %p UTC")
-      
-      %NaiveDateTime{} = ndt ->
-        ndt
-        |> Calendar.strftime("%b %d, %Y at %I:%M %p")
-      
-      _ -> "Unknown"
-    end
-  end
 
-  defp get_teams_count(draft) do
-    case draft.teams do
-      teams when is_list(teams) -> length(teams)
-      _ -> 0
-    end
-  end
 
-  defp get_draft_progress(draft) do
-    case draft.status do
-      :setup -> "Not started"
-      :active -> "In progress"
-      :paused -> "Paused"
-      :completed -> "Finished"
-      _ -> "Unknown"
-    end
-  end
 
-  @impl true
+
+
   def handle_event("archive_draft", %{"draft-id" => draft_id}, socket) do
     case Drafts.get_draft!(draft_id) do
       %{status: status} = draft when status in [:active, :paused] ->
@@ -158,6 +121,48 @@ defmodule AceAppWeb.DraftsLive do
       
       nil ->
         {:noreply, put_flash(socket, :error, "Draft not found")}
+    end
+  end
+
+  defp get_draft_status_badge(draft) do
+    case draft.status do
+      :setup -> {"bg-yellow-500/20 text-yellow-400 ring-yellow-500/30", "Setup"}
+      :active -> {"bg-green-500/20 text-green-400 ring-green-500/30", "Active"}
+      :paused -> {"bg-orange-500/20 text-orange-400 ring-orange-500/30", "Paused"}
+      :completed -> {"bg-blue-500/20 text-blue-400 ring-blue-500/30", "Completed"}
+      _ -> {"bg-gray-500/20 text-gray-400 ring-gray-500/30", "Unknown"}
+    end
+  end
+
+  defp format_created_at(created_at) do
+    case created_at do
+      %DateTime{} = dt ->
+        dt
+        |> DateTime.shift_zone!("Etc/UTC")
+        |> Calendar.strftime("%b %d, %Y at %I:%M %p UTC")
+      
+      %NaiveDateTime{} = ndt ->
+        ndt
+        |> Calendar.strftime("%b %d, %Y at %I:%M %p")
+      
+      _ -> "Unknown"
+    end
+  end
+
+  defp get_teams_count(draft) do
+    case draft.teams do
+      teams when is_list(teams) -> length(teams)
+      _ -> 0
+    end
+  end
+
+  defp get_draft_progress(draft) do
+    case draft.status do
+      :setup -> "Not started"
+      :active -> "In progress"
+      :paused -> "Paused"
+      :completed -> "Finished"
+      _ -> "Unknown"
     end
   end
 end

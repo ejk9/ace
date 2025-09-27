@@ -56,7 +56,7 @@ defmodule AceApp.GameDataSetup do
     
     try do
       unless opts[:skip_champions] do
-        setup_champions_incremental(opts)
+        setup_champions_parallel(opts)
       end
       
       unless opts[:skip_skins] do
@@ -97,33 +97,7 @@ defmodule AceApp.GameDataSetup do
     end
   end
 
-  @doc """
-  Sets up champion data incrementally - only adds new champions.
-  """
-  def setup_champions_incremental(opts \\ []) do
-    Logger.info("🏆 Checking for new champion data...")
-    
-    patch_version = opts[:patch] || get_latest_patch()
-    
-    case check_for_new_champions(patch_version) do
-      {:new_champions, new_champions} when length(new_champions) > 0 ->
-        Logger.info("📥 Found #{length(new_champions)} new champions to add")
-        add_new_champions(new_champions, patch_version)
-        
-      {:updated_patch, _old_patch} ->
-        Logger.info("🔄 New patch detected, checking all champions for updates")
-        setup_champions(opts ++ [force_update: true])
-        
-      :up_to_date ->
-        Logger.info("✅ Champion data is up to date")
-        :ok
-        
-      {:error, reason} ->
-        Logger.warning("⚠️ Could not check for new champions: #{inspect(reason)}")
-        Logger.info("🔄 Falling back to basic champion check")
-        setup_champions(opts)
-    end
-  end
+
 
   @doc """
   Sets up champion data only.
@@ -163,7 +137,7 @@ defmodule AceApp.GameDataSetup do
   @doc """
   Sets up skin data only.
   """
-  def setup_skins(opts \\ []) do
+  def setup_skins(_opts \\ []) do
     Logger.info("🎨 Setting up champion skin data...")
     # For now, we'll implement basic skin setup
     # This can be expanded based on your skin requirements
@@ -269,12 +243,14 @@ defmodule AceApp.GameDataSetup do
     end)
   end
   
-  defp create_or_update_champion(champion_data, patch_version, force_update) do
+  defp create_or_update_champion(champion_data, _patch_version, force_update) do
+    champion_id = String.to_integer(champion_data["key"])
+    
     champion_attrs = %{
       name: champion_data["name"],
       key: champion_data["key"],
       title: champion_data["title"],
-      image_url: build_square_image_url(champion_data["id"], patch_version),
+      image_url: build_splash_url(champion_id),
       roles: [], # Will be populated separately if needed
       tags: champion_data["tags"] || [],
       difficulty: 1, # Default difficulty
@@ -303,12 +279,10 @@ defmodule AceApp.GameDataSetup do
     |> Repo.update()
   end
   
-  defp build_splash_art_url(champion_id, patch_version) do
-    "#{@data_dragon_base}/cdn/img/champion/splash/#{champion_id}_0.jpg"
-  end
+
   
-  defp build_square_image_url(champion_id, patch_version) do
-    "#{@data_dragon_base}/cdn/#{patch_version}/img/champion/#{champion_id}.png"
+  defp build_splash_url(champion_id) do
+    "#{@community_dragon_base}/latest/champion/#{champion_id}/splash-art/centered"
   end
   
   defp get_latest_patch do

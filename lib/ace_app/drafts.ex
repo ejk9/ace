@@ -1393,12 +1393,7 @@ defmodule AceApp.Drafts do
     |> Repo.all()
   end
 
-  defp get_next_available_champion do
-    case AceApp.Repo.first(AceApp.LoL.Champion, order_by: :id) do
-      nil -> nil
-      champion -> champion.id
-    end
-  end
+
 
   defp get_next_pick_number(draft_id) do
     case from(p in Pick, where: p.draft_id == ^draft_id, select: max(p.pick_number))
