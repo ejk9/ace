@@ -12,13 +12,24 @@ defmodule AceApp.Release do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
     end
     
-    # Setup game data after migrations
-    setup_game_data()
+    # Game data setup will run asynchronously after app starts
+    IO.puts("✅ Migrations completed. Game data will be updated after app starts.")
   end
   
   def setup_game_data do
     load_app()
-    AceApp.GameDataSetup.setup_all_data()
+    
+    try do
+      case AceApp.GameDataSetup.setup_all_data() do
+        :ok -> 
+          IO.puts("✅ Game data setup completed successfully")
+        {:error, reason} -> 
+          IO.puts("⚠️ Game data setup failed, but continuing startup: #{inspect(reason)}")
+      end
+    rescue
+      error ->
+        IO.puts("⚠️ Game data setup crashed, but continuing startup: #{inspect(error)}")
+    end
   end
 
   def rollback(repo, version) do

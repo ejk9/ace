@@ -18,6 +18,8 @@ defmodule AceApp.Application do
       {DynamicSupervisor, strategy: :one_for_one, name: AceApp.DraftTimerSupervisor},
       # Discord notification queue for sequential message delivery
       AceApp.DiscordQueue,
+      # Async game data worker for non-blocking updates
+      AceApp.GameDataWorker,
       # Start to serve requests, typically the last entry
       AceAppWeb.Endpoint
     ]
