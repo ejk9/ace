@@ -1,7 +1,6 @@
 defmodule AceAppWeb.DraftController do
   use AceAppWeb, :controller
 
-  alias AceApp.Auth
   alias AceApp.Drafts
 
   def new(conn, _params) do

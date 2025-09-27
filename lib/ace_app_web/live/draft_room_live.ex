@@ -1615,7 +1615,7 @@ defmodule AceAppWeb.DraftRoomLive do
   @impl true
   def handle_info({:pick_made, pick}, socket) do
     # Send audio notification for pick made - get player data safely
-    {player_name, player_role} = case pick.player do
+    {player_name, _player_role} = case pick.player do
       %{display_name: name, preferred_roles: roles} -> 
         # Get primary role for display
         primary_role = case roles do

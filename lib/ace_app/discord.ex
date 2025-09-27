@@ -139,7 +139,7 @@ defmodule AceApp.Discord do
         Logger.info("Curl command: curl #{Enum.join(curl_args, " ")}")
         
         case System.cmd("curl", curl_args, stderr_to_stdout: true) do
-          {output, 0} ->
+          {_output, 0} ->
             Logger.info("Discord notification sent with image attachment: #{filename}")
             {:ok, :success}
           

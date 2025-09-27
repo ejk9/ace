@@ -67,6 +67,8 @@ defmodule AceAppWeb.DraftsLive do
       {:noreply, put_flash(socket, :error, "Draft not found")}
   end
 
+
+
   defp get_draft_status_badge(draft) do
     case draft.status do
       :setup -> {"bg-yellow-500/20 text-yellow-400 ring-yellow-500/30", "Setup"}
