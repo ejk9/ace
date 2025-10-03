@@ -52,8 +52,11 @@ RUN rm -rf _build/prod/lib/*/priv/static
 # Expose port  
 EXPOSE 4000
 
+# Create uploads directory
+RUN mkdir -p /app/priv/static/uploads
+
 # Create entrypoint script that runs migrations then starts app
-RUN echo '#!/bin/bash\nset -e\n_build/prod/rel/ace_app/bin/ace_app eval "AceApp.Release.migrate()"\nexec _build/prod/rel/ace_app/bin/ace_app start' > /app/entrypoint.sh
+RUN echo '#!/bin/bash\nset -e\nmkdir -p /app/priv/static/uploads\n_build/prod/rel/ace_app/bin/ace_app eval "AceApp.Release.migrate()"\nexec _build/prod/rel/ace_app/bin/ace_app start' > /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Start with migration
