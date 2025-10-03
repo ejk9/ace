@@ -50,7 +50,8 @@ defmodule AceAppWeb.DraftSetupLive do
       step = cond do
         length(players) >= length(teams) * 5 -> :players  # Ready to finalize
         length(teams) >= 2 -> :players  # Has teams, need players
-        true -> :teams  # Need teams first
+        length(teams) > 0 -> :teams  # Has some teams, stay on teams
+        true -> :basic_info  # New draft, start with basic info
       end
 
       # Load champions if we're on the players step

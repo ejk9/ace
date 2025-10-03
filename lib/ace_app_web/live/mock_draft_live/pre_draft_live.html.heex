@@ -170,12 +170,16 @@
                           <div class="flex-1 min-w-0">
                             <%= if predicted_pick do %>
                               <% player = Enum.find(@players, &(&1.id == predicted_pick.player_id)) %>
-                              <div class="pr-8">
-                                <div class="text-white font-medium truncate"><%= player.display_name %></div>
-                                <div class="text-sm text-slate-400 truncate">
-                                  <%= Enum.join(player.preferred_roles || [], ", ") %>
+                              <%= if player do %>
+                                <div class="pr-8">
+                                  <div class="text-white font-medium truncate"><%= player.display_name %></div>
+                                  <div class="text-sm text-slate-400 truncate">
+                                    <%= Enum.join(player.preferred_roles || [], ", ") %>
+                                  </div>
                                 </div>
-                              </div>
+                              <% else %>
+                                <div class="text-slate-500 italic truncate">Player not found</div>
+                              <% end %>
                             <% else %>
                               <div class="text-slate-500 italic truncate">Click to select player...</div>
                             <% end %>
