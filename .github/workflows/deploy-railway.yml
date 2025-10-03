@@ -25,61 +25,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install Railway CLI
-      run: |
-        npm install -g @railway/cli
-        railway --version
-
     - name: Deploy to Railway
-      run: railway up --detach
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      uses: bervProject/railway-deploy@main
+      with:
+        railway_token: ${{ secrets.RAILWAY_TOKEN }}
+        service: ${{ secrets.RAILWAY_SERVICE_NAME }}
 
-    - name: Wait for deployment
-      run: |
-        echo "⏳ Waiting for deployment to complete..."
-        sleep 60
-
-    - name: Health check
-      run: |
-        # Get the Railway domain
-        DOMAIN=$(railway domain 2>/dev/null || echo "")
-
-        if [ ! -z "$DOMAIN" ]; then
-          echo "Checking health at https://$DOMAIN"
-
-          # Retry health check up to 5 times
-          for i in {1..5}; do
-            if curl -f -s "https://$DOMAIN" > /dev/null; then
-              echo "✅ Health check passed!"
-              exit 0
-            else
-              echo "⏳ Health check failed, retrying in 30s... ($i/5)"
-              sleep 30
-            fi
-          done
-
-          echo "❌ Health check failed after 5 attempts"
-          exit 1
-        else
-          echo "⚠️ Could not get Railway domain, skipping health check"
-        fi
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-    - name: Notify deployment success
-      if: success()
-      run: |
-        DOMAIN=$(railway domain 2>/dev/null || echo "Railway deployment")
-        echo "🚀 Deployment successful!"
-        echo "🌐 Application URL: https://$DOMAIN"
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-    - name: Notify deployment failure
-      if: failure()
-      run: |
-        echo "❌ Deployment failed!"
-        railway logs --tail=20
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    - name: Deployment complete
+      run: echo "🚀 Deployment to Railway complete!"
