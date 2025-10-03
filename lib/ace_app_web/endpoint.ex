@@ -26,6 +26,15 @@ defmodule AceAppWeb.Endpoint do
     gzip: not code_reloading?,
     only: AceAppWeb.static_paths()
 
+  # Serve uploaded files from absolute path in production (Railway volume mount)
+  # This allows serving files uploaded at runtime, not just compile-time assets
+  if not code_reloading?() do
+    plug Plug.Static,
+      at: "/uploads",
+      from: Path.expand("priv/static/uploads"),
+      gzip: false
+  end
+
   if Code.ensure_loaded?(Tidewave) do
     plug Tidewave
   end
