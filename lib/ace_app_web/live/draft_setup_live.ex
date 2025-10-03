@@ -53,6 +53,13 @@ defmodule AceAppWeb.DraftSetupLive do
         true -> :teams  # Need teams first
       end
 
+      # Load champions if we're on the players step
+      champions = if step == :players do
+        LoL.list_enabled_champions()
+      else
+        []
+      end
+
       {:noreply,
        socket
        |> assign(:page_title, "Edit Draft - #{draft.name}")
@@ -61,6 +68,7 @@ defmodule AceAppWeb.DraftSetupLive do
        |> assign(:changeset, changeset)
        |> assign(:teams, teams)
        |> assign(:players, players)
+       |> assign(:champions, champions)
        |> allow_upload(:team_logo, 
            accept: ~w(.png .jpg .jpeg .svg .webp),
            max_entries: 1,
