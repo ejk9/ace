@@ -246,6 +246,13 @@ defmodule AceApp.Drafts do
               teams_count: length(updated_draft.teams || [])
             }, "system", "system")
             
+            # Broadcast draft started event to all connected clients
+            Phoenix.PubSub.broadcast(
+              AceApp.PubSub,
+              "draft:#{draft_id}",
+              {:draft_started}
+            )
+            
             # Telemetry for draft started
             :telemetry.execute([:ace_app, :drafts, :started], %{count: 1}, %{
               draft_id: draft_id,
@@ -376,6 +383,13 @@ defmodule AceApp.Drafts do
               pick_timer_seconds: updated_draft.pick_timer_seconds,
               teams_count: teams_count
             }, "system", "preview_mode")
+            
+            # Broadcast draft started event to all connected clients
+            Phoenix.PubSub.broadcast(
+              AceApp.PubSub,
+              "draft:#{draft_id}",
+              {:draft_started}
+            )
             
             # Telemetry for preview draft started
             :telemetry.execute([:ace_app, :drafts, :preview_started], %{count: 1}, %{
@@ -2389,7 +2403,7 @@ defmodule AceApp.Drafts do
 
     %DraftSnapshot{}
     |> DraftSnapshot.changeset(attrs)
-    |> Repo.insert()
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:draft_id, :pick_number])
   end
 
   @doc """

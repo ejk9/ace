@@ -48,7 +48,7 @@ class AudioManager {
       timer_warning: '/audio/timer_warning.mp3',
       timer_urgent: '/audio/timer_urgent.mp3', 
       timer_critical: '/audio/timer_critical.mp3',
-      turn_notification: '/audio/turn_notification.mp3',
+      turn_notification: '/audio/sfx-cs-draft-notif-yourpick.ogg',
       pick_made: '/audio/pick_made.mp3',
       draft_started: '/audio/draft_started.mp3'
     }
@@ -354,6 +354,10 @@ class AudioManager {
 
   // Timer warning notification
   playTimerWarning(secondsRemaining) {
+    if (!this.settings.enableTimerWarnings) {
+      return false
+    }
+    
     let soundType
     if (secondsRemaining <= 5) {
       soundType = 'timer_critical'
@@ -368,11 +372,19 @@ class AudioManager {
 
   // Turn notification (when it becomes your team's turn)
   playTurnNotification() {
+    if (!this.settings.enableTurnNotifications) {
+      return false
+    }
+    
     return this.playSound('turn_notification')
   }
 
   // Pick made notification
   playPickMade() {
+    if (!this.settings.enablePickNotifications) {
+      return false
+    }
+    
     return this.playSound('pick_made', { volume: this.settings.volume * 0.6 }) // Quieter
   }
 
@@ -403,9 +415,9 @@ class AudioManager {
     return {
       volume: 50, // 0-100
       muted: false,
-      enableTimerWarnings: true,
+      enableTimerWarnings: false,
       enableTurnNotifications: true,
-      enablePickNotifications: true
+      enablePickNotifications: false
     }
   }
 

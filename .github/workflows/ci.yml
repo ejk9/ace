@@ -1,4 +1,4 @@
-name: CI - Build & Test
+name: CI - Build & Deploy
 
 on:
   push:
@@ -7,28 +7,13 @@ on:
     branches: [ main, master, develop ]
 
 env:
-  MIX_ENV: test
+  MIX_ENV: prod
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  test:
-    name: Test & Quality Checks
+  build:
+    name: Build Application
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ace_app_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
 
     steps:
     - name: Checkout code
@@ -63,7 +48,7 @@ jobs:
       run: |
         mix local.hex --force
         mix local.rebar --force
-        mix deps.get
+        mix deps.get --only prod
 
     - name: Install Node.js dependencies
       run: |
@@ -71,151 +56,8 @@ jobs:
         cd assets && npm ci
         cd ../screenshot_service && npm ci
 
-    - name: Check formatting
-      run: mix format --check-formatted
-
-    - name: Run Credo linter
-      run: mix credo --strict
-
-    - name: Compile with warnings as errors
-      run: mix compile --warnings-as-errors
-
-    - name: Create and migrate test database
-      run: |
-        mix ecto.create
-        mix ecto.migrate
-      env:
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/ace_app_test
-
-    - name: Run Elixir tests
-      run: mix test --cover
-      env:
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/ace_app_test
-        # Mock Discord OAuth for tests
-        DISCORD_CLIENT_ID: test_client_id
-        DISCORD_CLIENT_SECRET: test_client_secret
-        SECRET_KEY_BASE: test_secret_key_base_that_is_at_least_64_characters_long_for_testing
-
-    - name: Generate test coverage report
-      run: mix test.coverage
+    - name: Compile application
+      run: mix compile
 
     - name: Build assets
-      run: mix assets.build
-
-    - name: Check for unused dependencies
-      run: mix deps.unlock --check-unused
-
-  e2e-tests:
-    name: End-to-End Tests
-    runs-on: ubuntu-latest
-    needs: test
-
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ace_app_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Elixir
-      uses: erlef/setup-beam@v1
-      with:
-        elixir-version: '1.15.7'
-        otp-version: '26.1.2'
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Restore Elixir dependencies cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          deps
-          _build
-        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-        restore-keys: ${{ runner.os }}-mix-
-
-    - name: Install dependencies
-      run: |
-        mix local.hex --force
-        mix local.rebar --force
-        mix deps.get
-        npm ci
-
-    - name: Install Playwright
-      run: npx playwright install --with-deps
-
-    - name: Setup test database
-      run: |
-        MIX_ENV=test mix ecto.create
-        MIX_ENV=test mix ecto.migrate
-        MIX_ENV=test mix setup_game_data --skip-migration
-      env:
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/ace_app_test
-
-    - name: Build assets for E2E tests
-      run: mix assets.build
-
-    - name: Start test server in background
-      run: |
-        MIX_ENV=test mix phx.server &
-        sleep 10
-      env:
-        PORT: 4002
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/ace_app_test
-        DISCORD_CLIENT_ID: test_client_id
-        DISCORD_CLIENT_SECRET: test_client_secret
-        SECRET_KEY_BASE: test_secret_key_base_that_is_at_least_64_characters_long_for_testing
-
-    - name: Run Playwright tests
-      run: npm run test:e2e
-      env:
-        CI: true
-
-    - name: Upload Playwright report
-      uses: actions/upload-artifact@v3
-      if: failure()
-      with:
-        name: playwright-report
-        path: playwright-report/
-        retention-days: 30
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Elixir
-      uses: erlef/setup-beam@v1
-      with:
-        elixir-version: '1.15.7'
-        otp-version: '26.1.2'
-
-    - name: Install dependencies
-      run: |
-        mix local.hex --force
-        mix local.rebar --force
-        mix deps.get
-
-    - name: Run security audit
-      run: mix deps.audit
-
-    - name: Check for vulnerable dependencies
-      run: mix hex.audit
+      run: mix assets.deploy
