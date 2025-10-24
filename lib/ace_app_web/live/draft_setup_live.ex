@@ -215,11 +215,16 @@ defmodule AceAppWeb.DraftSetupLive do
               
               case Imports.validate_csv_import(socket.assigns.draft.id, cleaned_content, import_type) do
                 {:ok, _validation_results} ->
-                  {:noreply,
-                   socket
+                  # Auto-import immediately after validation
+                  socket_with_data = socket
                    |> assign(:csv_preview_data, parsed_data)
                    |> assign(:csv_validation_errors, [])
-                   |> put_flash(:info, "CSV processed successfully! Review the data below.")}
+                  
+                  # Trigger the import based on type
+                  case socket.assigns.csv_import_step do
+                    :teams -> import_teams_from_csv(socket_with_data)
+                    :players -> import_players_from_csv(socket_with_data)
+                  end
                 
                 {:error, errors} when is_list(errors) ->
                   {:noreply,
@@ -948,21 +953,36 @@ defmodule AceAppWeb.DraftSetupLive do
           roles_str
           |> String.split(",")
           |> Enum.map(&String.trim/1)
+          |> Enum.map(&String.downcase/1)
           |> Enum.filter(& &1 != "")
+          |> Enum.map(&String.to_existing_atom/1)
         roles -> roles
       end
       
+      # Player creation params (only player-specific fields)
       player_params = %{
         "display_name" => player_data["display_name"] || player_data["Display Name"],
-        "summoner_name" => player_data["summoner_name"] || player_data["Summoner Name"],
-        "rank_tier" => player_data["rank_tier"] || player_data["Rank Tier"],
-        "rank_division" => player_data["rank_division"] || player_data["Rank Division"],
-        "server_region" => player_data["server_region"] || player_data["Server Region"],
         "organizer_notes" => player_data["organizer_notes"] || player_data["Organizer Notes"],
         "preferred_roles" => preferred_roles
       }
       
-      Drafts.create_player(draft_id, player_params)
+      # Create the player first
+      case Drafts.create_player(draft_id, player_params) do
+        {:ok, player} ->
+          # If we have account data, create a player account
+          summoner_name = player_data["summoner_name"] || player_data["Summoner Name"]
+          if summoner_name && String.trim(summoner_name) != "" do
+            account_params = %{
+              "summoner_name" => summoner_name,
+              "rank_tier" => player_data["rank_tier"] || player_data["Rank Tier"],
+              "rank_division" => player_data["rank_division"] || player_data["Rank Division"],
+              "server_region" => player_data["server_region"] || player_data["Server Region"] || "NA"
+            }
+            Drafts.create_player_account(player, account_params)
+          end
+          {:ok, player}
+        error -> error
+      end
     end)
     
     successful = Enum.count(results, fn {status, _} -> status == :ok end)

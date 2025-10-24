@@ -258,13 +258,14 @@ defmodule AceApp.GameDataSetup do
       release_date: Date.utc_today() # Required field for validation
     }
     
-    if force_update do
-      case Repo.get_by(Champion, key: champion_data["key"]) do
-        nil -> create_champion(champion_attrs)
-        existing_champion -> update_champion(existing_champion, champion_attrs)
-      end
-    else
-      create_champion(champion_attrs)
+    # Always check if champion exists first
+    case Repo.get_by(Champion, key: champion_data["key"]) do
+      nil -> 
+        create_champion(champion_attrs)
+      existing_champion when force_update -> 
+        update_champion(existing_champion, champion_attrs)
+      existing_champion -> 
+        {:ok, existing_champion} # Champion exists, skip without error
     end
   end
   
