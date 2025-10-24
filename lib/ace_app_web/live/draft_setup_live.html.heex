@@ -310,7 +310,7 @@
                     </button>
                   </div>
                   
-                  <div>
+                  <form phx-change="validate_csv_file">
                     <div
                       class="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer"
                       phx-drop-target={@uploads.csv_file.ref}
@@ -338,7 +338,7 @@
                         </div>
                       </div>
                     <% end %>
-                  </div>
+                  </form>
                 </div>
               <% else %>
                 <!-- Preview Data -->
@@ -843,7 +843,7 @@
                     </button>
                   </div>
                   
-                  <div>
+                  <form phx-change="validate_csv_file">
                     <div
                       class="border-2 border-dashed border-green-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors cursor-pointer"
                       phx-drop-target={@uploads.csv_file.ref}
@@ -871,7 +871,7 @@
                         </div>
                       </div>
                     <% end %>
-                  </div>
+                  </form>
                 </div>
               <% else %>
                 <!-- Preview Data -->
