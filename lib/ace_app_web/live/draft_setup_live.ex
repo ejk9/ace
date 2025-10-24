@@ -37,7 +37,8 @@ defmodule AceAppWeb.DraftSetupLive do
          accept: ~w(.csv),
          max_entries: 1,
          max_file_size: 5_242_880,  # 5MB
-         auto_upload: false)}
+         auto_upload: true,
+         progress: &handle_csv_progress/3)}
   end
 
   @impl true
@@ -190,83 +191,7 @@ defmodule AceAppWeb.DraftSetupLive do
      |> assign(:csv_validation_errors, [])}
   end
 
-  @impl true
-  def handle_event("validate_csv_upload", _params, socket) do
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("upload_csv", _params, socket) do
-    try do
-      case consume_uploaded_entries(socket, :csv_file, &process_csv_upload/2) do
-        [csv_content] ->
-          import_type = case socket.assigns.csv_import_step do
-            :teams -> "teams"
-            :players -> "players"
-          end
-          
-          case parse_csv_data(csv_content) do
-            {:ok, [_ | _] = parsed_data} ->
-              # Use the cleaned CSV content for validation
-              cleaned_content = csv_content
-                |> String.replace("\r\n", "\n")
-                |> String.replace("\r", "\n")
-                |> clean_csv_quotes()
-              
-              case Imports.validate_csv_import(socket.assigns.draft.id, cleaned_content, import_type) do
-                {:ok, _validation_results} ->
-                  # Auto-import immediately after validation
-                  socket_with_data = socket
-                   |> assign(:csv_preview_data, parsed_data)
-                   |> assign(:csv_validation_errors, [])
-                  
-                  # Trigger the import based on type
-                  case socket.assigns.csv_import_step do
-                    :teams -> import_teams_from_csv(socket_with_data)
-                    :players -> import_players_from_csv(socket_with_data)
-                  end
-                
-                {:error, errors} when is_list(errors) ->
-                  {:noreply,
-                   socket
-                   |> assign(:csv_preview_data, parsed_data)
-                   |> assign(:csv_validation_errors, errors)
-                   |> put_flash(:error, "CSV has validation errors. Please review.")}
-                
-                {:error, error} ->
-                  {:noreply,
-                   socket
-                   |> put_flash(:error, "Validation failed: #{format_error_message(error)}")}
-              end
-            
-            {:ok, _empty_data} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "CSV file appears to be empty or contains no valid data rows.")}
-            
-            {:error, error} ->
-              {:noreply,
-               socket
-               |> put_flash(:error, "Invalid CSV file format: #{format_error_message(error)}")}
-          end
-        
-        [] ->
-          {:noreply,
-           socket
-           |> put_flash(:error, "Please select a CSV file to upload.")}
-           
-        _other ->
-          {:noreply,
-           socket
-           |> put_flash(:error, "Failed to process the uploaded file. Please try again.")}
-      end
-    rescue
-      _error ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "An error occurred while processing your CSV file. Please check the file format and try again.")}
-    end
-  end
+  # CSV upload handlers moved to handle_csv_progress/2 for auto-upload
 
   @impl true
   def handle_event("import_csv_data", _params, socket) do
@@ -783,6 +708,77 @@ defmodule AceAppWeb.DraftSetupLive do
   # File upload handlers
 
   defp handle_logo_progress(_entry, _upload_entry, socket), do: {:noreply, socket}
+
+  defp handle_csv_progress(entry, socket) when entry.done? do
+    # CSV upload is complete, process it automatically
+    case consume_uploaded_entries(socket, :csv_file, &process_csv_upload/2) do
+      [csv_content] ->
+        import_type = case socket.assigns.csv_import_step do
+          :teams -> "teams"
+          :players -> "players"
+        end
+        
+        case parse_csv_data(csv_content) do
+          {:ok, [_ | _] = parsed_data} ->
+            # Use the cleaned CSV content for validation
+            cleaned_content = csv_content
+              |> String.replace("\r\n", "\n")
+              |> String.replace("\r", "\n")
+              |> clean_csv_quotes()
+            
+            case Imports.validate_csv_import(socket.assigns.draft.id, cleaned_content, import_type) do
+              {:ok, _validation_results} ->
+                # Auto-import immediately after validation
+                socket_with_data = socket
+                 |> assign(:csv_preview_data, parsed_data)
+                 |> assign(:csv_validation_errors, [])
+                
+                # Trigger the import based on type
+                case socket.assigns.csv_import_step do
+                  :teams -> import_teams_from_csv(socket_with_data)
+                  :players -> import_players_from_csv(socket_with_data)
+                end
+              
+              {:error, errors} when is_list(errors) ->
+                {:noreply,
+                 socket
+                 |> assign(:csv_preview_data, parsed_data)
+                 |> assign(:csv_validation_errors, errors)
+                 |> put_flash(:error, "CSV has validation errors. Please review.")}
+              
+              {:error, error} ->
+                {:noreply,
+                 socket
+                 |> put_flash(:error, "Validation failed: #{format_error_message(error)}")}
+            end
+          
+          {:ok, _empty_data} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "CSV file appears to be empty or contains no valid data rows.")}
+          
+          {:error, error} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Invalid CSV file format: #{format_error_message(error)}")}
+        end
+      
+      [] ->
+        {:noreply, socket}
+        
+      _other ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to process the uploaded file. Please try again.")}
+    end
+  rescue
+    _error ->
+      {:noreply,
+       socket
+       |> put_flash(:error, "An error occurred while processing your CSV file. Please check the file format and try again.")}
+  end
+
+  defp handle_csv_progress(_entry, socket), do: {:noreply, socket}
 
   defp handle_team_logo_upload(socket, team_params) do
     uploaded_files = 

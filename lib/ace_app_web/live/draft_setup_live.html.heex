@@ -310,7 +310,7 @@
                     </button>
                   </div>
                   
-                  <form phx-submit="upload_csv" phx-change="validate_csv_upload">
+                  <div>
                     <div
                       class="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer"
                       phx-drop-target={@uploads.csv_file.ref}
@@ -324,7 +324,7 @@
                         <span class="text-blue-600 font-medium hover:text-blue-500">Upload a file</span>
                         <p class="text-blue-500">or drag and drop</p>
                       </div>
-                      <p class="text-xs text-blue-400">CSV files up to 5MB</p>
+                      <p class="text-xs text-blue-400">CSV files up to 5MB - Automatically processes when uploaded</p>
                     </div>
 
                     <%= for entry <- @uploads.csv_file.entries do %>
@@ -338,15 +338,7 @@
                         </div>
                       </div>
                     <% end %>
-
-                    <button
-                      type="submit"
-                      disabled={@uploads.csv_file.entries == []}
-                      class="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Process CSV
-                    </button>
-                  </form>
+                  </div>
                 </div>
               <% else %>
                 <!-- Preview Data -->
@@ -851,7 +843,7 @@
                     </button>
                   </div>
                   
-                  <form phx-submit="upload_csv" phx-change="validate_csv_upload">
+                  <div>
                     <div
                       class="border-2 border-dashed border-green-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors cursor-pointer"
                       phx-drop-target={@uploads.csv_file.ref}
@@ -865,7 +857,7 @@
                         <span class="text-green-600 font-medium hover:text-green-500">Upload a file</span>
                         <p class="text-green-500">or drag and drop</p>
                       </div>
-                      <p class="text-xs text-green-400">CSV files up to 5MB</p>
+                      <p class="text-xs text-green-400">CSV files up to 5MB - Automatically processes when uploaded</p>
                     </div>
 
                     <%= for entry <- @uploads.csv_file.entries do %>
@@ -879,15 +871,7 @@
                         </div>
                       </div>
                     <% end %>
-
-                    <button
-                      type="submit"
-                      disabled={@uploads.csv_file.entries == []}
-                      class="mt-4 w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Process CSV
-                    </button>
-                  </form>
+                  </div>
                 </div>
               <% else %>
                 <!-- Preview Data -->
