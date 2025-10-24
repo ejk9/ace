@@ -162,6 +162,11 @@ defmodule AceAppWeb.StreamController do
         picks |> Enum.sort_by(& &1.pick_number)
     end
     
+    # Get the correct format module and generate draft order
+    format_module = AceApp.Drafts.DraftFormat.get_format_module(draft.format, draft.draft_variant || :standard)
+    draft_order = format_module.generate_full_draft_order(draft.teams)
+    picks_per_team = format_module.picks_per_team()
+    
     current_team = get_current_team(draft)
     
     # Always load players with champions for precaching
@@ -207,11 +212,23 @@ defmodule AceAppWeb.StreamController do
         name: draft.name,
         status: draft.status,
         format: draft.format,
+        draft_variant: draft.draft_variant,
         pick_timer_seconds: draft.pick_timer_seconds,
         current_pick_number: length(picks) + 1,
-        total_picks: length(draft.teams) * 5
+        total_picks: length(draft.teams) * picks_per_team,
+        picks_per_team: picks_per_team
       },
       teams: Enum.map(draft.teams, &format_team_for_stream/1),
+      draft_order: Enum.map(draft_order, fn slot ->
+        %{
+          round: slot.round,
+          pick_number: slot.pick_number,
+          position_in_round: slot.position_in_round,
+          team_id: slot.team.id,
+          team_name: slot.team.name,
+          team_pick_order_position: slot.team.pick_order_position
+        }
+      end),
       recent_picks: picks |> Enum.take(-5) |> Enum.map(&format_pick_for_stream/1),
       all_picks: picks |> Enum.map(&format_pick_for_stream/1),
       precache_images: precache_images,
@@ -323,8 +340,12 @@ defmodule AceAppWeb.StreamController do
   end
 
   defp build_roster_data(draft) do
+    # Calculate picks per team based on captain requirement
+    picks_per_team = if draft.format == :captain_mode or draft.captains_required, do: 4, else: 5
+    
     teams_with_rosters = Enum.map(draft.teams, fn team ->
       team_picks = Drafts.get_team_picks(draft.id, team.id)
+      team_captain = Drafts.get_team_captain(team.id)
       
       %{
         id: team.id,
@@ -334,6 +355,15 @@ defmodule AceAppWeb.StreamController do
         color: get_team_color(team.pick_order_position),
         captain_token: team.captain_token,
         is_ready: team.is_ready,
+        captain: if team_captain do
+          %{
+            id: team_captain.id,
+            display_name: team_captain.display_name,
+            preferred_roles: team_captain.preferred_roles
+          }
+        else
+          nil
+        end,
         roster: Enum.map(team_picks, fn pick ->
           pick = Drafts.preload_pick_associations(pick)
           %{
@@ -344,17 +374,20 @@ defmodule AceAppWeb.StreamController do
               display_name: pick.player.display_name,
               preferred_roles: pick.player.preferred_roles,
               custom_stats: pick.player.custom_stats,
-              organizer_notes: pick.player.organizer_notes
+              organizer_notes: pick.player.organizer_notes,
+              is_captain: pick.player.is_captain
             },
             picked_at: pick.picked_at |> DateTime.to_iso8601(),
             pick_duration_ms: pick.pick_duration_ms
           }
         end) |> Enum.sort_by(& &1.pick_number),
         roster_count: length(team_picks),
-        roster_complete: length(team_picks) == 5
+        roster_complete: length(team_picks) == picks_per_team
       }
     end)
     |> Enum.sort_by(& &1.pick_order_position)
+
+    total_picks_possible = length(draft.teams) * picks_per_team
 
     %{
       draft: %{
@@ -362,15 +395,17 @@ defmodule AceAppWeb.StreamController do
         name: draft.name,
         status: draft.status,
         format: draft.format,
+        captains_required: draft.captains_required,
+        picks_per_team: picks_per_team,
         total_teams: length(draft.teams),
-        total_picks_possible: length(draft.teams) * 5,
+        total_picks_possible: total_picks_possible,
         total_picks_made: Drafts.count_picks(draft.id)
       },
       teams: teams_with_rosters,
       draft_progress: %{
         completed_picks: Drafts.count_picks(draft.id),
-        total_picks: length(draft.teams) * 5,
-        percentage: round((Drafts.count_picks(draft.id) / (length(draft.teams) * 5)) * 100),
+        total_picks: total_picks_possible,
+        percentage: if(total_picks_possible > 0, do: round((Drafts.count_picks(draft.id) / total_picks_possible) * 100), else: 0),
         teams_complete: Enum.count(teams_with_rosters, & &1.roster_complete),
         teams_incomplete: Enum.count(teams_with_rosters, &(!&1.roster_complete))
       },

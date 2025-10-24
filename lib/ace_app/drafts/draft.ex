@@ -5,7 +5,9 @@ defmodule AceApp.Drafts.Draft do
   schema "drafts" do
     field(:name, :string)
     field(:status, Ecto.Enum, values: [:setup, :active, :paused, :completed], default: :setup)
-    field(:format, Ecto.Enum, values: [:snake, :regular, :auction], default: :snake)
+    field(:format, Ecto.Enum, values: [:snake, :regular, :auction, :captain_mode], default: :snake)
+    field(:draft_variant, Ecto.Enum, values: [:standard, :third_round_reversal], default: :standard)
+    field(:captains_required, :boolean, default: false)
     field(:pick_timer_seconds, :integer, default: 60)
     field(:current_pick_deadline, :utc_datetime)
     field(:organizer_token, :string)
@@ -44,6 +46,8 @@ defmodule AceApp.Drafts.Draft do
       :name,
       :status,
       :format,
+      :draft_variant,
+      :captains_required,
       :pick_timer_seconds,
       :current_turn_team_id,
       :current_pick_deadline,
@@ -61,7 +65,8 @@ defmodule AceApp.Drafts.Draft do
     ])
     |> validate_required([:name, :format])
     |> validate_length(:name, min: 1)
-    |> validate_inclusion(:format, [:snake, :regular, :auction])
+    |> validate_inclusion(:format, [:snake, :regular, :auction, :captain_mode])
+    |> validate_inclusion(:draft_variant, [:standard, :third_round_reversal])
     |> validate_number(:pick_timer_seconds,
       greater_than_or_equal_to: 10,
       less_than_or_equal_to: 300

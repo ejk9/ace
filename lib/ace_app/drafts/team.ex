@@ -15,6 +15,7 @@ defmodule AceApp.Drafts.Team do
     belongs_to(:draft, AceApp.Drafts.Draft)
     belongs_to(:logo_upload, AceApp.Files.FileUpload)
     has_many(:picks, AceApp.Drafts.Pick)
+    has_many(:players, AceApp.Drafts.Player)
 
     timestamps(type: :utc_datetime)
   end

@@ -323,6 +323,8 @@
                 '<div class="w-5 h-5 bg-slate-500 rounded-sm opacity-60 mx-auto mb-1"></div>';
 
             const playerName = player.name || 'Unknown Player';
+            const captainIcon = player.is_captain ? 
+                '<svg class="w-3 h-3 text-yellow-400 inline-block ml-0.5" fill="currentColor" viewBox="0 0 20 20" title="Captain"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>' : '';
 
             // Dynamic font sizing based on name length
             let textSizeClass = 'text-sm';
@@ -335,7 +337,7 @@
             return `
                 <div class="text-center">
                     ${roleIconHtml}
-                    <div class="${textSizeClass} font-bold text-slate-100 leading-tight px-1" style="word-break: break-word; hyphens: auto;">${playerName}</div>
+                    <div class="${textSizeClass} font-bold text-slate-100 leading-tight px-1" style="word-break: break-word; hyphens: auto;">${playerName}${captainIcon}</div>
                 </div>
             `;
         }
@@ -694,10 +696,30 @@
 
 
 
+        function formatDisplayName(draft) {
+            const formatMap = {
+                'snake': 'Snake Draft',
+                'captain_mode': 'Captain Mode',
+                'regular': 'Regular Draft',
+                'auction': 'Auction Draft'
+            };
+            
+            const baseFormat = formatMap[draft.format] || draft.format;
+            
+            const variantMap = {
+                'third_round_reversal': ' (3rd Round Reversal)',
+                'standard': ''
+            };
+            
+            const variant = draft.draft_variant ? (variantMap[draft.draft_variant] || ` (${draft.draft_variant})`) : '';
+            
+            return baseFormat + variant;
+        }
+
         function updateHeader(data) {
             document.getElementById('draftTitle').textContent = data.draft.name;
             document.getElementById('draftSubtitle').textContent =
-                `Draft Room • ${data.draft.format} • Player Draft`;
+                `Draft Room • ${formatDisplayName(data.draft)} • Player Draft`;
 
             const statusElement = document.getElementById('draftStatus');
             const status = data.draft.status.toUpperCase();
@@ -770,13 +792,13 @@
             const container = document.getElementById('condensedRounds');
 
             if (!data.teams || data.teams.length === 0) return;
+            if (!data.draft_order || data.draft_order.length === 0) return;
 
-            // Sort teams by pick order position to ensure correct draft order
+            // Sort teams by pick order position for reference
             const sortedTeams = [...data.teams].sort((a, b) => a.pick_order_position - b.pick_order_position);
-
             const teamsCount = sortedTeams.length;
-            const rounds = 5; // Standard 5 rounds
             const currentPick = data.draft.current_pick_number;
+            const picksPerTeam = data.draft.picks_per_team || 5;
 
             // Create a map of pick numbers to pick data for quick lookup
             const pickMap = {};
@@ -786,11 +808,27 @@
                 });
             }
 
+            // Create a map of team_id to team data
+            const teamMap = {};
+            data.teams.forEach(team => {
+                teamMap[team.id] = team;
+            });
+
+            // Group draft order by round
+            const orderByRound = {};
+            data.draft_order.forEach(slot => {
+                if (!orderByRound[slot.round]) {
+                    orderByRound[slot.round] = [];
+                }
+                orderByRound[slot.round].push(slot);
+            });
+
             let roundsHTML = '';
 
             // Generate each round as a horizontal row
-            for (let round = 1; round <= rounds; round++) {
-                const roundStartPick = (round - 1) * teamsCount + 1;
+            for (let round = 1; round <= picksPerTeam; round++) {
+                const roundSlots = orderByRound[round] || [];
+                if (roundSlots.length === 0) continue;
 
                 roundsHTML += `
                     <div class="bg-slate-800 rounded-lg p-1 border border-slate-700">
@@ -805,31 +843,14 @@
                             <div class="flex-1 grid gap-1" style="grid-template-columns: repeat(${teamsCount}, 1fr);">
                 `;
 
-                // First pass: Generate team name headers
-                // For snake draft, we need to show teams in the order they pick in this round
-                const teamOrderForRound = [];
-                for (let pickInRound = 1; pickInRound <= teamsCount; pickInRound++) {
-                    const pickNumber = roundStartPick + pickInRound - 1;
-
-                    // Snake order: odd rounds go 1->n, even rounds go n->1
-                    let teamIndex;
-                    if (round % 2 === 1) {
-                        // Odd rounds: normal order (1, 2, 3, 4, ...)
-                        teamIndex = pickInRound - 1;
-                    } else {
-                        // Even rounds: reverse order (..., 4, 3, 2, 1)
-                        teamIndex = teamsCount - pickInRound;
-                    }
-
-                    teamOrderForRound.push({
-                        team: sortedTeams[teamIndex],
-                        pickNumber: pickNumber,
-                        displayOrder: round % 2 === 1 ? pickInRound - 1 : teamsCount - pickInRound
-                    });
-                }
-
-                // Sort by display order to show teams in snake draft order
-                teamOrderForRound.sort((a, b) => a.displayOrder - b.displayOrder);
+                // Use the draft_order from backend to determine team order for this round
+                const teamOrderForRound = roundSlots.map(slot => {
+                    return {
+                        team: teamMap[slot.team_id],
+                        pickNumber: slot.pick_number,
+                        position_in_round: slot.position_in_round
+                    };
+                }).sort((a, b) => a.position_in_round - b.position_in_round);
 
                 for (let i = 0; i < teamOrderForRound.length; i++) {
                     const {team, pickNumber} = teamOrderForRound[i];

@@ -12,6 +12,7 @@ defmodule AceAppWeb.DraftSetupLive do
      |> assign(:step, :basic_info)
      |> assign(:draft, nil)
      |> assign(:changeset, Drafts.change_draft(%Drafts.Draft{}))
+     |> assign(:selected_format, :snake)
      |> assign(:teams, [])
      |> assign(:players, [])
      |> assign(:champions, [])  # Lazy-loaded when needed
@@ -25,6 +26,7 @@ defmodule AceAppWeb.DraftSetupLive do
      |> assign(:team_changeset, nil)  # for editing existing teams
      |> assign(:new_team_changeset, Drafts.change_team(%Drafts.Team{}))  # for adding new teams
      |> assign(:player_changeset, nil)
+     |> assign(:captain_player_id, nil)  # for captain team selection modal
      |> allow_upload(:team_logo, 
          accept: ~w(.png .jpg .jpeg .svg .webp),
          max_entries: 1,
@@ -47,11 +49,13 @@ defmodule AceAppWeb.DraftSetupLive do
       changeset = Drafts.change_draft(draft)
 
       # Determine the appropriate step based on current state
+      # For newly created drafts with setup status, always start at basic_info
       step = cond do
+        draft.status == :setup and length(teams) == 0 and length(players) == 0 -> :basic_info  # New draft
         length(players) >= length(teams) * 5 -> :players  # Ready to finalize
         length(teams) >= 2 -> :players  # Has teams, need players
         length(teams) > 0 -> :teams  # Has some teams, stay on teams
-        true -> :basic_info  # New draft, start with basic info
+        true -> :basic_info  # Fallback to basic info
       end
 
       # Load champions if we're on the players step
@@ -67,6 +71,7 @@ defmodule AceAppWeb.DraftSetupLive do
        |> assign(:step, step)
        |> assign(:draft, draft)
        |> assign(:changeset, changeset)
+       |> assign(:selected_format, draft.format)
        |> assign(:teams, teams)
        |> assign(:players, players)
        |> assign(:champions, champions)
@@ -121,6 +126,12 @@ defmodule AceAppWeb.DraftSetupLive do
   end
 
   @impl true
+  def handle_event("format_changed", %{"draft" => %{"format" => format}}, socket) do
+    format_atom = String.to_existing_atom(format)
+    {:noreply, assign(socket, :selected_format, format_atom)}
+  end
+
+  @impl true
   def handle_event("update_draft", %{"draft" => draft_params}, socket) do
     case Drafts.update_draft(socket.assigns.draft, draft_params) do
       {:ok, draft} ->
@@ -131,6 +142,7 @@ defmodule AceAppWeb.DraftSetupLive do
          socket
          |> assign(:draft, draft)
          |> assign(:changeset, Drafts.change_draft(draft))
+         |> assign(:selected_format, draft.format)
          |> put_flash(:info, "Draft updated successfully!")}
 
       {:error, changeset} ->
@@ -613,6 +625,53 @@ defmodule AceAppWeb.DraftSetupLive do
   end
 
   @impl true
+  def handle_event("show_captain_team_selector", %{"player-id" => player_id}, socket) do
+    player_id = String.to_integer(player_id)
+    {:noreply, assign(socket, :captain_player_id, player_id)}
+  end
+  
+  @impl true
+  def handle_event("cancel_captain_selection", _params, socket) do
+    {:noreply, assign(socket, :captain_player_id, nil)}
+  end
+  
+  @impl true
+  def handle_event("set_captain_for_team", %{"player-id" => player_id, "team-id" => team_id}, socket) do
+    player_id = String.to_integer(player_id)
+    team_id = String.to_integer(team_id)
+    
+    case Drafts.set_captain(player_id, team_id) do
+      {:ok, _player} ->
+        players = Drafts.list_players(socket.assigns.draft.id)
+        {:noreply,
+         socket
+         |> assign(:players, players)
+         |> assign(:captain_player_id, nil)
+         |> put_flash(:info, "Captain set successfully!")}
+      
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to set captain")}
+    end
+  end
+  
+  @impl true
+  def handle_event("unset_captain", %{"player-id" => player_id}, socket) do
+    player_id = String.to_integer(player_id)
+    
+    case Drafts.unset_captain(player_id) do
+      {:ok, _player} ->
+        players = Drafts.list_players(socket.assigns.draft.id)
+        {:noreply,
+         socket
+         |> assign(:players, players)
+         |> put_flash(:info, "Captain removed successfully!")}
+      
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to remove captain")}
+    end
+  end
+
+  @impl true
   def handle_event("remove_player", %{"player-id" => player_id}, socket) do
     player = Drafts.get_player!(player_id)
 
@@ -635,17 +694,33 @@ defmodule AceAppWeb.DraftSetupLive do
     draft = socket.assigns.draft
     teams = socket.assigns.teams
     players = socket.assigns.players
+    
+    # Calculate required players based on format
+    # When captains are required (either via captain_mode or captains_required flag),
+    # we only need 4 picks per team since the captain is pre-assigned
+    required_players_per_team = if draft.format == :captain_mode or draft.captains_required, do: 4, else: 5
 
+    # Validate captain requirements if needed (captain mode or captains_required flag)
+    captain_validation = if draft.format == :captain_mode or draft.captains_required do
+      Drafts.validate_captain_mode_requirements(draft.id)
+    else
+      :ok
+    end
+    
     cond do
       length(teams) < 2 ->
         {:noreply, put_flash(socket, :error, "Draft needs at least 2 teams")}
+      
+      captain_validation != :ok ->
+        {:error, message} = captain_validation
+        {:noreply, put_flash(socket, :error, message)}
 
-      length(players) < length(teams) * 5 ->
+      length(players) < length(teams) * required_players_per_team ->
         {:noreply,
          put_flash(
            socket,
            :error,
-           "Draft needs at least #{length(teams) * 5} players (5 per team)"
+           "Draft needs at least #{length(teams) * required_players_per_team} players (#{required_players_per_team} per team)"
          )}
 
       true ->

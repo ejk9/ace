@@ -1879,6 +1879,26 @@ defmodule AceAppWeb.DraftRoomLive do
   #   Enum.random(champions)
   # end
 
+  # Format display helper for the UI
+  def format_display_name(draft) do
+    base_format = case draft.format do
+      :snake -> "Snake Draft"
+      :captain_mode -> "Captain Mode"
+      :regular -> "Regular Draft"
+      :auction -> "Auction Draft"
+      _ -> String.capitalize(to_string(draft.format))
+    end
+    
+    variant = case draft.draft_variant do
+      :third_round_reversal -> " (3rd Round Reversal)"
+      :standard -> ""
+      nil -> ""
+      _ -> " (#{String.capitalize(to_string(draft.draft_variant))})"
+    end
+    
+    base_format <> variant
+  end
+
   # Role helper for the UI
   def role_display_name("all"), do: "All"
   def role_display_name("adc"), do: "ADC"

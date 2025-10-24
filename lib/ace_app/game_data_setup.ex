@@ -254,7 +254,8 @@ defmodule AceApp.GameDataSetup do
       roles: [], # Will be populated separately if needed
       tags: champion_data["tags"] || [],
       difficulty: 1, # Default difficulty
-      enabled: true
+      enabled: true,
+      release_date: Date.utc_today() # Required field for validation
     }
     
     if force_update do

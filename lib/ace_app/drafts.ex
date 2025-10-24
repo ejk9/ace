@@ -112,7 +112,7 @@ defmodule AceApp.Drafts do
   def get_draft_with_associations!(id) do
     Repo.get!(Draft, id)
     |> Repo.preload([
-      :teams,
+      teams: [players: [:champion]],  # Preload captains with teams
       picks: [:player, :team],
       players: [:champion]
     ])
@@ -677,18 +677,28 @@ defmodule AceApp.Drafts do
   Returns available (unpicked) players for a draft.
   """
   def list_available_players(draft_id) do
+    draft = get_draft!(draft_id)
+    
     picked_player_ids =
       from(pk in Pick,
         where: pk.draft_id == ^draft_id,
         select: pk.player_id
       )
 
-    from(p in Player,
+    query = from(p in Player,
       where: p.draft_id == ^draft_id and p.id not in subquery(picked_player_ids),
       order_by: p.display_name,
-      preload: [:player_accounts]
+      preload: [:player_accounts, :team]
     )
-    |> Repo.all()
+    
+    # Exclude captains from available players if captain mode or captains_required
+    query = if draft.format == :captain_mode or draft.captains_required do
+      from p in query, where: p.is_captain == false
+    else
+      query
+    end
+    
+    Repo.all(query)
   end
 
   @doc """
@@ -799,6 +809,85 @@ defmodule AceApp.Drafts do
   """
   def change_player(%Player{} = player, attrs \\ %{}) do
     Player.changeset(player, attrs)
+  end
+  
+  @doc """
+  Sets a player as captain for their team.
+  Only one captain per team is allowed.
+  Requires the player to have a team_id assigned.
+  """
+  def set_captain(player_id, team_id) do
+    player = get_player!(player_id)
+    
+    # First, unset any existing captain for this team
+    from(p in Player,
+      where: p.draft_id == ^player.draft_id and p.team_id == ^team_id and p.is_captain == true
+    )
+    |> Repo.update_all(set: [is_captain: false])
+    
+    # Then set the new captain with team assignment
+    player
+    |> Player.changeset(%{is_captain: true, team_id: team_id})
+    |> Repo.update()
+  end
+  
+  @doc """
+  Removes captain status from a player.
+  """
+  def unset_captain(player_id) do
+    player = get_player!(player_id)
+    
+    player
+    |> Player.changeset(%{is_captain: false})
+    |> Repo.update()
+  end
+  
+  @doc """
+  Gets the captain for a specific team.
+  """
+  def get_team_captain(team_id) do
+    from(p in Player,
+      where: p.team_id == ^team_id and p.is_captain == true
+    )
+    |> Repo.one()
+  end
+  
+  @doc """
+  Gets all captains for a draft.
+  """
+  def get_draft_captains(draft_id) do
+    from(p in Player,
+      where: p.draft_id == ^draft_id and p.is_captain == true,
+      preload: [:team]
+    )
+    |> Repo.all()
+  end
+  
+  @doc """
+  Validates that drafts with captains_required have one captain per team before starting.
+  """
+  def validate_captain_mode_requirements(draft_id) do
+    draft = get_draft!(draft_id) |> Repo.preload(:teams)
+    
+    # Check both captain_mode format and captains_required flag
+    requires_captains = draft.format == :captain_mode or draft.captains_required
+    
+    if requires_captains do
+      captains = get_draft_captains(draft_id)
+      num_teams = length(draft.teams)
+      num_captains = length(captains)
+      
+      cond do
+        num_captains == 0 -> 
+          {:error, "This draft requires one captain per team"}
+        num_captains < num_teams -> 
+          {:error, "This draft requires one captain per team (#{num_captains}/#{num_teams} assigned)"}
+        true -> 
+          :ok
+      end
+    else
+      :ok
+    end
   end
 
   @doc """
@@ -1318,8 +1407,14 @@ defmodule AceApp.Drafts do
   def get_next_team_to_pick(%Draft{} = draft) do
     draft = draft |> Repo.preload(:teams)
     pick_number = get_next_pick_number(draft.id)
+    
+    # Get the appropriate format module based on draft format and variant
+    format_module = AceApp.Drafts.DraftFormat.get_format_module(
+      draft.format,
+      draft.draft_variant || :standard
+    )
 
-    case AceApp.Drafts.Formats.SnakeDraft.get_next_team(draft, pick_number) do
+    case format_module.get_next_team(draft, pick_number) do
       {:ok, team} -> team
       :draft_complete -> nil
     end
