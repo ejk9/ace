@@ -165,7 +165,8 @@ defmodule AceAppWeb.StreamController do
     # Get the correct format module and generate draft order
     format_module = AceApp.Drafts.DraftFormat.get_format_module(draft.format, draft.draft_variant || :standard)
     draft_order = format_module.generate_full_draft_order(draft.teams)
-    picks_per_team = format_module.picks_per_team()
+    # Override picks_per_team if captains are required (captain_mode or captains_required flag)
+    picks_per_team = if draft.format == :captain_mode or draft.captains_required, do: 4, else: format_module.picks_per_team()
     
     current_team = get_current_team(draft)
     
